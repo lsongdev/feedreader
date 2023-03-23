@@ -1,0 +1,8 @@
+github.com/mattn/go-sqlite3 v1.14.16 h1:yOQRA0RpS5PFz/oikGwBEqvAWhWg5ufRz4ETLjwpU1Y=
+github.com/mattn/go-sqlite3 v1.14.16/go.mod h1:2eHXhiwb8IkHr+BDWZGa96P6+rkvnG63S2DGjv9HUNg=
+github.com/song940/feedparser-go v0.0.0-20230321111223-d5f488229e73 h1:G4C1SMHT+c6//rnC9P1o813hjx7OrO7qzeCxl9SZUFA=
+github.com/song940/feedparser-go v0.0.0-20230321111223-d5f488229e73/go.mod h1:516xGlEq1IUucHrFg7nWC/Y9FBNib5coQiqCKFu0A7c=
+github.com/song940/feedparser-go v0.0.0-20230323064418-9f05d2afa7ef h1:EGVHBx4LTHmLpI6nHgMN0gboKD4MYD41heY9PcxbMh8=
+github.com/song940/feedparser-go v0.0.0-20230323064418-9f05d2afa7ef/go.mod h1:516xGlEq1IUucHrFg7nWC/Y9FBNib5coQiqCKFu0A7c=
+golang.org/x/net v0.8.0/go.mod h1:QVkue5JL9kW//ek3r6jTKnTFis1tRmNAW2P1shuFdJc=
+golang.org/x/text v0.8.0/go.mod h1:e1OnstbJyHTd6l/uOt8jFFHp6TRDWZR/bV3emEE/zU8=
