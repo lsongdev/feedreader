@@ -1,0 +1,29 @@
+{{define "page"}}
+<h2>Discover</h2>
+
+<form action="/new">
+  <div class="form-field">
+    <input type="url" name="url" placeholder="Website URL" required value="{{.url}}">
+  </div>
+  <div class="form-field">
+    <input type="submit" value="Discover">
+  </div>
+</form>
+
+<h2>Subscribe</h2>
+
+<form method="post" action="/new">
+  <div class="form-field">
+    <input type="text" name="name" placeholder="Title" required value="{{.name}}">
+  </div>
+  <div class="form-field">
+    <input type="url" name="home" placeholder="Homepage" required value="{{.home}}">
+  </div>
+  <div class="form-field">
+    <input type="url" name="link" placeholder="Feed Link" required value="{{.link}}">
+  </div>
+  <div class="form-field">
+    <input type="submit" value="Subscribe">
+  </div>
+</form>
+{{end}}

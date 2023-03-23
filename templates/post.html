@@ -1,0 +1,10 @@
+{{define "page"}}
+<article class="post yue">
+  <h2><a href="{{.post.Link}}">{{.post.Title}}</a></h2>
+  <time>{{.post.CreatedAt}}</time>
+
+  <article>
+    {{.post.Content}}
+  </article>
+</article>
+{{end}}
