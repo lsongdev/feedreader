@@ -1,0 +1,30 @@
+<style>
+  .container {
+    max-width: 650px;
+    margin: auto;
+  }
+</style>
+<div class="container">
+
+  <h1><a href="/">Reader</a></h1>
+
+  <nav>
+    <a href="/">home</a>
+    <a href="/new">new</a>
+  </nav>
+
+  <h2>Subscriptions</h2>
+
+  <ul>
+    {{range $i, $subscription := .subscriptions}}
+    <li>
+      <a href="/subscription?id={{$subscription.id}}">{{$subscription.name}}</a>
+      <!-- <nav>
+      <a href="{{$subscription.home}}">home</a>
+      <a href="/subscription/{{$subscription.id}}/edit">edit</a>
+      <a href="/subscription/{{$subscription.id}}/delete">delete</a>
+    </nav> -->
+    </li>
+    {{end}}
+  </ul>
+</div>
