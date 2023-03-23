@@ -1,0 +1,11 @@
+{{define "page"}}
+<h2>Posts <a href="{{.subscription.Home}}" target="_blank">{{.subscription.Name}}</a></h2>
+
+<ul class="list">
+  {{range $i, $post := .posts}}
+  <li>
+    <a href="/posts?id={{$post.Id}}">{{$post.Title}}</a>
+  </li>
+  {{end}}
+</ul>
+{{end}}
