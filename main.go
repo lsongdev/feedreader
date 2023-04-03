@@ -9,5 +9,6 @@ func main() {
 	}
 
 	http.HandleFunc("/", reader.IndexView)
+	http.HandleFunc("/new", reader.SubscribeView)
 	http.ListenAndServe(":8080", nil)
 }

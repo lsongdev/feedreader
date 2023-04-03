@@ -6,17 +6,25 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/song940/feedreader/feed"
 	"github.com/song940/feedreader/opml"
-	"github.com/song940/feedreader/parsers"
 )
 
 type H map[string]interface{}
 
+type ReaderFeed struct {
+	feed.RssFeed
+	Id        uint64
+	CreatedAt time.Time
+}
+
 type ReaderItem struct {
-	parsers.RssItem
-	Id uint64 `db:"id"`
+	feed.RssItem
+	Id        uint64 `db:"id"`
+	CreatedAt time.Time
 }
 
 type Storage struct {
@@ -36,36 +44,34 @@ func (s *Storage) Init() (err error) {
 	sql := `
 		create table if not exists feeds (
       id INTEGER PRIMARY KEY,
-      title TEXT NOT NULL,
-      link TEXT UNIQUE NOT NULL,
-      description TEXT NOT NULL,
-      pubdate INTEGER NOT NULL
-		);`
+			title text not null,
+			link text not null,
+			created_at timestamp default CURRENT_TIMESTAMP
+		);
+		create table if not exists entries (
+			id INTEGER PRIMARY KEY,
+			feed_id INTEGER not null,
+			title text not null,
+			link text not null,
+			content text not null,
+			pubdate timestamp not null,
+			created_at timestamp default CURRENT_TIMESTAMP,
+	    FOREIGN KEY (feed_id) REFERENCES feeds(id)
+		);
+		`
 	_, err = s.db.Exec(sql)
 	return
 }
 
-func (s *Storage) insertItem(item *parsers.RssItem) (err error) {
+func (s *Storage) insertItem(item *feed.RssItem) (err error) {
 	sql := `insert into feeds (title, link, description, pubdate) values (?, ?, ?, ?)`
 	_, err = s.db.Exec(sql, item.Title, item.Link, item.Description, item.PubDate)
 	return
 }
 
-func (s *Storage) getItems() (items []*ReaderItem, err error) {
-	sql := `select * from feeds`
-	rows, err := s.db.Query(sql)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		item := &ReaderItem{}
-		err = rows.Scan(&item.Id, &item.Title, &item.Link, &item.Description, &item.PubDate)
-		if err != nil {
-			return
-		}
-		items = append(items, item)
-	}
+func (s *Storage) addFeed(feed *feed.RssFeed) (out *ReaderFeed, err error) {
+	sql := `insert into feeds (title, link) values (?, ?) returning id`
+	err = s.db.QueryRow(sql, feed.Title, feed.Link, feed.Link).Scan(&out.Id)
 	return
 }
 
@@ -94,7 +100,7 @@ func New() (reader *Reader, err error) {
 
 func (r *Reader) Update(feeds *opml.OPML) {
 	for _, outline := range feeds.Outlines {
-		rss, err := parsers.FetchRss(outline.XMLURL)
+		rss, err := feed.FetchRss(outline.XMLURL)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -122,11 +128,27 @@ func (r *Reader) Reader(w http.ResponseWriter, name string, data H) {
 }
 
 func (reader *Reader) IndexView(w http.ResponseWriter, r *http.Request) {
-	items, err := reader.store.getItems()
+	items, err := reader.store
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	reader.Reader(w, "index", H{
 		"items": items,
 	})
+}
+
+func (reader *Reader) SubscribeView(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		reader.Reader(w, "new", H{})
+		return
+	}
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		feedLink := r.FormValue("link")
+		feed, err := feed.FetchRss(feedLink)
+		if err != nil {
+			log.Fatal(err)
+		}
+		reader.store.addFeed(feed)
+	}
 }

@@ -1,4 +1,4 @@
-package parsers
+package feed
 
 import (
 	"bytes"
@@ -17,10 +17,9 @@ type RssItem struct {
 }
 
 type RssFeed struct {
-	Title       string    `xml:"channel>title"`
-	Link        string    `xml:"channel>link"`
-	Description string    `xml:"channel>description"`
-	Items       []RssItem `xml:"channel>item"`
+	Title string    `xml:"channel>title"`
+	Link  string    `xml:"channel>link"`
+	Items []RssItem `xml:"channel>item"`
 }
 
 func ParseRss(data []byte) (feed *RssFeed, err error) {
