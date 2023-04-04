@@ -27,12 +27,35 @@ type ReaderItem struct {
 	CreatedAt time.Time
 }
 
+type Reader struct {
+	store *Storage
+}
+
+func New() (reader *Reader, err error) {
+	store, err := NewStorage()
+	if err != nil {
+		return
+	}
+	store.Init()
+	reader = &Reader{store}
+	f, err := os.ReadFile("./subscriptions.opml")
+	if err != nil {
+		log.Fatal(err)
+	}
+	feeds, err := opml.ParseOPML(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	go reader.Update(feeds)
+	return
+}
+
 type Storage struct {
 	db *sql.DB
 }
 
 func NewStorage() (store *Storage, err error) {
-	db, err := sql.Open("sqlite3", "feedreader.db")
+	db, err := sql.Open("sqlite3", "reader.db")
 	if err != nil {
 		return
 	}
@@ -63,38 +86,34 @@ func (s *Storage) Init() (err error) {
 	return
 }
 
-func (s *Storage) insertItem(item *feed.RssItem) (err error) {
-	sql := `insert into feeds (title, link, description, pubdate) values (?, ?, ?, ?)`
-	_, err = s.db.Exec(sql, item.Title, item.Link, item.Description, item.PubDate)
-	return
-}
-
 func (s *Storage) addFeed(feed *feed.RssFeed) (out *ReaderFeed, err error) {
+	out = &ReaderFeed{}
 	sql := `insert into feeds (title, link) values (?, ?) returning id`
-	err = s.db.QueryRow(sql, feed.Title, feed.Link, feed.Link).Scan(&out.Id)
+	err = s.db.QueryRow(sql, feed.Title, feed.Link).Scan(&out.Id)
 	return
 }
 
-type Reader struct {
-	store *Storage
+func (s *Storage) insertItem(id uint64, item *feed.RssItem) (err error) {
+	sql := `insert into entries (feed_id, title, link, content, pubdate) values (?, ?, ?, ?, ?)`
+	_, err = s.db.Exec(sql, id, item.Title, item.Link, item.Description, item.PubDate)
+	return
 }
 
-func New() (reader *Reader, err error) {
-	store, err := NewStorage()
-	if err != nil {
-		return
-	}
-	store.Init()
-	reader = &Reader{store}
-	f, err := os.ReadFile("./subscriptions.opml")
+func (s *Storage) getEntries() (items []*ReaderItem, err error) {
+	sql := `select id, title, link, content, pubdate, created_at  from entries;`
+	rows, err := s.db.Query(sql)
 	if err != nil {
 		log.Fatal(err)
 	}
-	feeds, err := opml.ParseOPML(f)
-	if err != nil {
-		log.Fatal(err)
+	defer rows.Close()
+	for rows.Next() {
+		var item ReaderItem
+		err = rows.Scan(&item.Id, &item.Title, &item.Link, &item.Description, &item.PubDate, &item.CreatedAt)
+		if err != nil {
+			log.Fatal(err)
+		}
+		items = append(items, &item)
 	}
-	go reader.Update(feeds)
 	return
 }
 
@@ -105,8 +124,12 @@ func (r *Reader) Update(feeds *opml.OPML) {
 			log.Fatal(err)
 		}
 		log.Println(rss.Title)
+		feed, err := r.store.addFeed(rss)
+		if err != nil {
+			log.Fatal(err)
+		}
 		for _, item := range rss.Items {
-			r.store.insertItem(&item)
+			err = r.store.insertItem(feed.Id, &item)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -128,9 +151,10 @@ func (r *Reader) Reader(w http.ResponseWriter, name string, data H) {
 }
 
 func (reader *Reader) IndexView(w http.ResponseWriter, r *http.Request) {
-	items, err := reader.store
+	items, err := reader.store.getEntries()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	reader.Reader(w, "index", H{
 		"items": items,
