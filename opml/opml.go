@@ -1,14 +1,21 @@
 package opml
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"time"
+)
 
 type Outline struct {
-	Text   string `xml:"text,attr"`
-	XMLURL string `xml:"xmlUrl,attr"`
+	Title   string `xml:"title"`
+	Text    string `xml:"text,attr"`
+	XMLURL  string `xml:"xmlUrl,attr"`
+	HTMLURL string `xml:"htmlUrl,attr"`
 }
 
 type OPML struct {
-	Outlines []Outline `xml:"body>outline"`
+	Title     string    `xml:"head>title"`
+	Outlines  []Outline `xml:"body>outline"`
+	CreatedAt time.Time `xml:"dateCreated"`
 }
 
 func ParseOPML(data []byte) (opml *OPML, err error) {

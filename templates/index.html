@@ -1,11 +1,7 @@
-<h2>Feeds</h2>
+<h1>{{.Title}}</h1>
 
 <ul>
-  {{range .items}}
-    <li>
-      <a href="{{.Link}}">{{.Title}}</a>
-      <!-- <p>{{.Description}}</p> -->
-      <p>{{.PubDate}}</p>
-    </li>
+  {{range $i, $f := .Feeds}}
+  <li><a href="/feeds/{{$i}}">{{.Text}}</a></li>
   {{end}}
 </ul>
