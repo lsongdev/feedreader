@@ -4,5 +4,7 @@ github.com/song940/feedparser-go v0.0.0-20230321111223-d5f488229e73 h1:G4C1SMHT+
 github.com/song940/feedparser-go v0.0.0-20230321111223-d5f488229e73/go.mod h1:516xGlEq1IUucHrFg7nWC/Y9FBNib5coQiqCKFu0A7c=
 github.com/song940/feedparser-go v0.0.0-20230323064418-9f05d2afa7ef h1:EGVHBx4LTHmLpI6nHgMN0gboKD4MYD41heY9PcxbMh8=
 github.com/song940/feedparser-go v0.0.0-20230323064418-9f05d2afa7ef/go.mod h1:516xGlEq1IUucHrFg7nWC/Y9FBNib5coQiqCKFu0A7c=
+github.com/song940/feedparser-go v0.0.0-20231205100823-b114d7a779bc h1:nD+sitXIDtZEyRO5Skw8Tz1i/ss2IcP57yepENmv2yM=
+github.com/song940/feedparser-go v0.0.0-20231205100823-b114d7a779bc/go.mod h1:516xGlEq1IUucHrFg7nWC/Y9FBNib5coQiqCKFu0A7c=
 golang.org/x/net v0.8.0/go.mod h1:QVkue5JL9kW//ek3r6jTKnTFis1tRmNAW2P1shuFdJc=
 golang.org/x/text v0.8.0/go.mod h1:e1OnstbJyHTd6l/uOt8jFFHp6TRDWZR/bV3emEE/zU8=

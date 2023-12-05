@@ -1,0 +1,24 @@
+<style>
+.container {
+  max-width: 650px;
+  margin: auto;
+}
+</style>
+<div class="container">
+  <h1><a href="/">Reader</a></h1>
+
+  <nav>
+    <a href="/">home</a>
+    <a href="/new">new</a>
+  </nav>
+
+  <h2>{{.subscription.name}}</h2>
+
+  <ul>
+    {{range $i, $post := .posts}}
+    <li>
+      <a href="/post?id={{$post.id}}">{{$post.title}}</a>
+    </li>
+    {{end}}
+  </ul>
+</div>
