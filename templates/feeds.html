@@ -1,0 +1,11 @@
+{{define "page"}}
+<h2>Subscriptions</h2>
+
+<ul>
+  {{range $i, $subscription := .subscriptions}}
+  <li>
+    <a href="/feeds?id={{$subscription.id}}">{{$subscription.name}}</a>
+  </li>
+  {{end}}
+</ul>
+{{end}}

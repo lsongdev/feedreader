@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"embed"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -11,7 +13,18 @@ import (
 	"github.com/song940/feedparser-go/feed"
 )
 
+//go:embed templates/*.html
+var templatefiles embed.FS
+
 type H map[string]interface{}
+
+type Post struct {
+	Id        int
+	Title     string
+	Content   template.HTML
+	Link      string
+	CreatedAt time.Time
+}
 
 // Reader represents the main application struct.
 type Reader struct {
@@ -23,6 +36,7 @@ type Reader struct {
 func New() (reader *Reader, err error) {
 	// Open a database connection
 	file := "./reader.db"
+
 	db, err := sql.Open("sqlite3", file)
 	if err != nil {
 		return nil, err
@@ -67,14 +81,18 @@ func New() (reader *Reader, err error) {
 }
 
 // Render renders an HTML template with the provided data.
-func (reader *Reader) Render(w http.ResponseWriter, name string, data H) {
-	t, err := template.ParseFiles("./templates/" + name + ".html")
+func (reader Reader) Render(w http.ResponseWriter, templateName string, data H) {
+	// tmpl, err := template.ParseFiles("templates/layout.html", "templates/"+templateName+".html")
+	// Parse templates from embedded file system
+	tmpl, err := template.New("").ParseFS(templatefiles, "templates/layout.html", "templates/"+templateName+".html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Add("Content-Type", "text/html; charset=utf-8")
-	err = t.Execute(w, data)
+
+	// Execute "index.html" within the layout and write to response
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	err = tmpl.ExecuteTemplate(w, "layout", data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -89,98 +107,147 @@ func (reader *Reader) CreateSubscription(name, home, link string) (string, error
 	return id, err
 }
 
-// GetSubscriptions retrieves all subscriptions from the database.
-func (reader *Reader) GetSubscriptions() ([]H, error) {
-	rows, err := reader.db.Query("SELECT id, name, home, link, created_at FROM subscriptions ORDER BY created_at DESC")
+// GetEntriesByCriteria retrieves entries (subscriptions or posts) based on the provided filter.
+func (reader *Reader) GetFeedsByFilter(filter string, value interface{}) ([]H, error) {
+	var query string
+	switch filter {
+	case "id":
+		query = `
+		SELECT id, name, home, link, created_at
+		FROM subscriptions
+		WHERE id = ? 
+		ORDER BY created_at DESC
+	`
+	default:
+		query = `
+		SELECT id, name, home, link, created_at
+		FROM subscriptions
+		ORDER BY created_at DESC
+	`
+	}
+	var rows *sql.Rows
+	var err error
+	if filter != "" {
+		rows, err = reader.db.Query(query, value)
+	} else {
+		rows, err = reader.db.Query(query)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var subscriptions []H
-
+	var entries []H
 	for rows.Next() {
 		var id, name, home, link, createdAt string
 		err := rows.Scan(&id, &name, &home, &link, &createdAt)
 		if err != nil {
 			return nil, err
 		}
-		subscription := H{
+		entry := H{
 			"id":         id,
 			"name":       name,
 			"home":       home,
 			"link":       link,
 			"created_at": createdAt,
 		}
-		subscriptions = append(subscriptions, subscription)
+		entries = append(entries, entry)
 	}
-
-	return subscriptions, nil
+	return entries, nil
 }
 
-// GetSubscription retrieves a specific subscription from the database.
-func (reader *Reader) GetSubscription(id string) (H, error) {
-	row := reader.db.QueryRow("SELECT name, home, link, created_at FROM subscriptions WHERE id = ?", id)
+// GetFeeds retrieves all subscriptions from the database.
+func (reader *Reader) GetFeeds() ([]H, error) {
+	return reader.GetFeedsByFilter("", nil)
+}
 
-	var name, home, link string
-	var createdAt string // Change the type based on the actual type in your database
-
-	err := row.Scan(&name, &home, &link, &createdAt)
+// GetFeed retrieves a specific subscription from the database.
+func (reader *Reader) GetFeed(id string) (H, error) {
+	entries, err := reader.GetFeedsByFilter("id", id)
 	if err != nil {
 		return nil, err
 	}
-	subscription := H{
-		"id":         id,
-		"name":       name,
-		"home":       home,
-		"link":       link,
-		"created_at": createdAt,
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("subscription not found")
 	}
-	return subscription, nil
+	return entries[0], nil
 }
 
-// GetSubscriptionPosts retrieves posts for a specific subscription.
-func (reader *Reader) GetSubscriptionPosts(id string) ([]H, error) {
-	rows, err := reader.db.Query(`
-		SELECT id, title, content, created_at
-		FROM posts
-		WHERE subscription_id = ?
-		ORDER BY created_at DESC
-	`, id)
+// GetPostsByFilter retrieves posts based on the provided filter.
+func (reader *Reader) GetPostsByFilter(filter string, value interface{}) ([]Post, error) {
+	var query string
+	switch filter {
+	case "id":
+		query = `
+			SELECT id, title, content, link, created_at
+			FROM posts
+			WHERE id = ? 
+			ORDER BY created_at DESC
+		`
+	case "subscription_id":
+		query = `
+			SELECT id, title, content, link, created_at
+			FROM posts
+			WHERE subscription_id = ? 
+			ORDER BY created_at DESC
+		`
+	default:
+		query = `
+			SELECT id, title, content, link, created_at
+			FROM posts
+			ORDER BY created_at DESC
+		`
+	}
+	var rows *sql.Rows
+	var err error
+	if filter != "" {
+		rows, err = reader.db.Query(query, value)
+	} else {
+		rows, err = reader.db.Query(query)
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var posts []H
-
+	var posts []Post
 	for rows.Next() {
-		var id int
-		var title, content string
-		var createdAt string // Change the type based on the actual type in your database
-
-		err := rows.Scan(&id, &title, &content, &createdAt)
+		var post Post
+		err := rows.Scan(&post.Id, &post.Title, &post.Content, &post.Link, &post.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-
-		post := H{
-			"id":         id,
-			"title":      title,
-			"created_at": createdAt,
-		}
-
 		posts = append(posts, post)
 	}
-
 	return posts, nil
+}
+
+// GetPost retrieves a specific post from the database.
+func (reader *Reader) GetPost(id string) (Post, error) {
+	posts, err := reader.GetPostsByFilter("id", id)
+	if err != nil {
+		return Post{}, err
+	}
+	if len(posts) == 0 {
+		return Post{}, fmt.Errorf("post not found")
+	}
+	return posts[0], nil
+}
+
+// GetPosts retrieves all posts from the database.
+func (reader *Reader) GetPosts() ([]Post, error) {
+	return reader.GetPostsByFilter("", nil)
+}
+
+// GetPostsBySubscriptionId retrieves posts for a specific subscription.
+func (reader *Reader) GetPostsBySubscriptionId(id string) ([]Post, error) {
+	return reader.GetPostsByFilter("subscription_id", id)
 }
 
 // updatePostsPeriodically periodically updates posts for all subscriptions.
 func (reader *Reader) updatePostsPeriodically() {
 	for range reader.tick.C {
 		// Get all subscriptions and update posts for each
-		subscriptions, err := reader.GetSubscriptions()
+		subscriptions, err := reader.GetFeeds()
 		if err != nil {
 			log.Println("Error getting subscriptions:", err)
 			continue
@@ -199,7 +266,7 @@ func (reader *Reader) updatePostsPeriodically() {
 
 // updateSubscriptionPosts fetches new articles for a subscription and saves them to the database.
 func (reader *Reader) updateSubscriptionPosts(id string) error {
-	subscrition, err := reader.GetSubscription(id)
+	subscrition, err := reader.GetFeed(id)
 	if err != nil {
 		return err
 	}
@@ -216,48 +283,76 @@ func (reader *Reader) updateSubscriptionPosts(id string) error {
 }
 
 // CreatePost adds a new post to the database.
-func (reader *Reader) CreatePost(subscriptionID string, title, content, link, pubDate string) error {
+func (reader *Reader) CreatePost(subscriptionID, title, content, link, pubDate string) error {
+	createdAt, _ := time.Parse(time.RFC1123Z, pubDate)
 	_, err := reader.db.Exec(`
 		INSERT INTO posts (title, content, link, created_at, subscription_id) VALUES (?, ?, ?, ?, ?)
-	`, title, content, link, pubDate, subscriptionID)
+	`, title, content, link, createdAt, subscriptionID)
 	return err
 }
 
-func (reader *Reader) GetPost(id string) (H, error) {
-	row := reader.db.QueryRow(`
-		SELECT title, content, link, created_at
-		FROM posts
-		WHERE id = ?
-	`, id)
-	var title, content, link, createdAt string
-	err := row.Scan(&title, &content, &link, &createdAt)
-	if err != nil {
-		return nil, err
+// FeedView handles requests to the feed page.
+func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		subscriptions, err := reader.GetFeeds()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		reader.Render(w, "feeds", H{
+			"subscriptions": subscriptions,
+		})
+		return
 	}
-	post := H{
-		"title":      title,
-		"content":    template.HTML(content),
-		"link":       link,
-		"created_at": createdAt,
-	}
-	return post, nil
-}
-
-// IndexView handles requests to the home page.
-func (reader *Reader) IndexView(w http.ResponseWriter, r *http.Request) {
-	subscriptions, err := reader.GetSubscriptions()
+	subscription, err := reader.GetFeed(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	reader.Render(w, "index", H{
-		"subscriptions": subscriptions,
+	posts, err := reader.GetPostsBySubscriptionId(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	reader.Render(w, "feed", H{
+		"subscription": subscription,
+		"posts":        posts,
 	})
+}
+
+// PostView handles requests to view a specific post.
+func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		posts, err := reader.GetPosts()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// Render the template with the data
+		reader.Render(w, "posts", H{
+			"posts": posts,
+		})
+		return
+	}
+	post, err := reader.GetPost(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	reader.Render(w, "post", H{
+		"post": post,
+	})
+}
+
+// IndexView handles requests to the home page.
+func (reader *Reader) IndexView(w http.ResponseWriter, r *http.Request) {
+	reader.PostView(w, r)
 }
 
 // NewView handles requests to the new subscription page.
 func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
-
 	if r.Method == "POST" {
 		name := r.FormValue("name")
 		home := r.FormValue("home")
@@ -292,36 +387,6 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (reader *Reader) SubscriptionView(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	subscrition, err := reader.GetSubscription(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	posts, err := reader.GetSubscriptionPosts(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	reader.Render(w, "list", H{
-		"subscription": subscrition,
-		"posts":        posts,
-	})
-}
-
-func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	post, err := reader.GetPost(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	reader.Render(w, "post", H{
-		"post": post,
-	})
-}
-
 func main() {
 	reader, err := New()
 	if err != nil {
@@ -330,7 +395,7 @@ func main() {
 
 	http.HandleFunc("/", reader.IndexView)
 	http.HandleFunc("/new", reader.NewView)
-	http.HandleFunc("/subscription", reader.SubscriptionView)
-	http.HandleFunc("/post", reader.PostView)
+	http.HandleFunc("/feeds", reader.FeedView)
+	http.HandleFunc("/posts", reader.PostView)
 	http.ListenAndServe(":8080", nil)
 }

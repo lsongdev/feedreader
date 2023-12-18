@@ -1,31 +1,10 @@
-<style>
-  @import "https://lab.lepture.com/yue.css/yue.css";
+{{define "page"}}
+<article class="post yue">
+  <h2><a href="{{.post.Link}}">{{.post.Title}}</a></h2>
+  <time>{{.post.CreatedAt}}</time>
 
-  .container {
-    max-width: 650px;
-    margin: auto;
-  }
-  img {
-    max-width: 100%;
-    display: block !important;
-    margin: auto !important;
-  }
-</style>
-<div class="container">
-  <h1><a href="/">Reader</a></h1>
-
-  <nav>
-    <a href="/">home</a>
-    <a href="/new">subscribe</a>
-  </nav>
-
-  <main class="post yue">
-
-    <h2><a href="{{.post.link}}">{{.post.title}}</a></h2>
-    <time>{{.post.created_at}}</time>
-
-    <article>
-      {{.post.content}}
-    </article>
-  </main>
-</div>
+  <article>
+    {{.post.Content}}
+  </article>
+</article>
+{{end}}
