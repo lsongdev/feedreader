@@ -1,7 +1,7 @@
 {{define "page"}}
 <h2>Subscriptions</h2>
 
-<ul>
+<ul class="list">
   {{range $i, $subscription := .subscriptions}}
   <li>
     <a href="/feeds?id={{$subscription.id}}">{{$subscription.name}}</a>

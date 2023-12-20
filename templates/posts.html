@@ -1,10 +1,11 @@
 {{define "page"}}
-<h2>Home</h2>
-<ul>
-    {{range $i, $post := .posts}}
-    <li>
-        <a href="/posts?id={{$post.Id}}">{{$post.Title}}</a>
-    </li>
-    {{end}}
+<h2>Posts {{.subscription.name}}</h2>
+
+<ul class="list">
+  {{range $i, $post := .posts}}
+  <li>
+    <a href="/posts?id={{$post.Id}}">{{$post.Title}}</a>
+  </li>
+  {{end}}
 </ul>
 {{end}}

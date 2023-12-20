@@ -55,7 +55,7 @@ func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	reader.Render(w, "feed", H{
+	reader.Render(w, "posts", H{
 		"subscription": subscription,
 		"posts":        posts,
 	})
