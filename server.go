@@ -4,6 +4,7 @@ import (
 	"embed"
 	"html/template"
 	"net/http"
+	"strconv"
 
 	"github.com/song940/feedparser-go/feed"
 )
@@ -45,7 +46,12 @@ func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	subscription, err := reader.GetFeed(id)
+	idInt, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	subscription, err := reader.GetFeed(idInt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

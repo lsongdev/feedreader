@@ -1,5 +1,5 @@
 {{define "page"}}
-<h2>Posts {{.subscription.name}}</h2>
+<h2>Posts <a href="{{.subscription.Home}}" target="_blank">{{.subscription.Name}}</a></h2>
 
 <ul class="list">
   {{range $i, $post := .posts}}

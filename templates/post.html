@@ -1,7 +1,8 @@
 {{define "page"}}
 <article class="post yue">
-  <h2><a href="{{.post.Link}}">{{.post.Title}}</a></h2>
-  <time>{{.post.CreatedAt}}</time>
+  <h2><a href="{{.post.Link}}" target="_blank">{{.post.Title}}</a></h2>
+  <time>{{.post.CreatedAt}}</time> |
+  <a href="/feeds?id={{.post.Subscription.Id}}">{{.post.Subscription.Name}}</a>
 
   <article>
     {{.post.Content}}
