@@ -14,8 +14,11 @@ func main() {
 
 	http.HandleFunc("/", reader.IndexView)
 	http.HandleFunc("/new", reader.NewView)
-	http.HandleFunc("/feeds", reader.FeedView)
 	http.HandleFunc("/posts", reader.PostView)
+	http.HandleFunc("/subscriptions", reader.SubscriptionsView)
+	http.HandleFunc("/rss.xml", reader.RssXML)
+	http.HandleFunc("/atom.xml", reader.AomXML)
+	http.HandleFunc("/opml.xml", reader.OpmlXML)
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err)

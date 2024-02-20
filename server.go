@@ -2,11 +2,15 @@ package main
 
 import (
 	"embed"
+	"encoding/xml"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/song940/feedparser-go/feed"
+	"github.com/song940/feedparser-go/opml"
 )
 
 //go:embed templates/*.html
@@ -32,11 +36,63 @@ func (reader Reader) Render(w http.ResponseWriter, templateName string, data H) 
 	}
 }
 
+// IndexView handles requests to the home page.
+func (reader *Reader) IndexView(w http.ResponseWriter, r *http.Request) {
+	reader.PostView(w, r)
+}
+
+// NewView handles requests to the new subscription page.
+func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		feedType := r.FormValue("type")
+		name := r.FormValue("name")
+		home := r.FormValue("home")
+		link := r.FormValue("link")
+		id, err := reader.CreateSubscription(feedType, name, home, link)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusFound)
+		go reader.updateSubscriptionPosts(id)
+		return
+	}
+
+	var feedType, name, home, link string
+	url := r.URL.Query().Get("url")
+	link = url
+	if link != "" {
+		if feedType == "" {
+			rss, err := feed.FetchRss(link)
+			if err == nil {
+				feedType = "rss"
+				name = rss.Title
+				home = rss.Link
+			}
+		}
+		if feedType == "" {
+			atom, err := feed.FetchAtom(link)
+			if err == nil {
+				feedType = "atom"
+				name = atom.Title.Data
+				home = atom.Links[0].Href
+			}
+		}
+	}
+	reader.Render(w, "new", H{
+		"type": feedType,
+		"name": name,
+		"home": home,
+		"link": link,
+		"url":  url,
+	})
+}
+
 // FeedView handles requests to the feed page.
-func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
+func (reader *Reader) SubscriptionsView(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		subscriptions, err := reader.GetFeeds()
+		subscriptions, err := reader.GetSubscriptions()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -46,12 +102,12 @@ func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	idInt, err := strconv.Atoi(id)
+	subscriptionID, err := strconv.Atoi(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	subscription, err := reader.GetFeed(idInt)
+	subscription, err := reader.GetSubscription(subscriptionID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -89,46 +145,87 @@ func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 	}
 	reader.Render(w, "post", H{
 		"post": post,
+		"body": template.HTML(post.Content),
 	})
 }
 
-// IndexView handles requests to the home page.
-func (reader *Reader) IndexView(w http.ResponseWriter, r *http.Request) {
-	reader.PostView(w, r)
-}
-
-// NewView handles requests to the new subscription page.
-func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		name := r.FormValue("name")
-		home := r.FormValue("home")
-		link := r.FormValue("link")
-		id, err := reader.CreateFeed(name, home, link)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		http.Redirect(w, r, "/", http.StatusFound)
-		go reader.updateSubscriptionPosts(id)
+func (reader *Reader) RssXML(w http.ResponseWriter, r *http.Request) {
+	posts, err := reader.GetPosts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	var name, home, link string
-	url := r.URL.Query().Get("url")
-	link = url
-	if link != "" {
-		rss, err := feed.FetchRss(link)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		name = rss.Title
-		home = rss.Link
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	rss := feed.RssFeed{
+		Title: "Reader",
 	}
-	reader.Render(w, "new", H{
-		"name": name,
-		"home": home,
-		"link": link,
-		"url":  url,
-	})
+	for _, post := range posts {
+		rss.Items = append(rss.Items, feed.RssItem{
+			Title:       post.Title,
+			Description: post.Content,
+			Link:        post.Link,
+			PubDate:     post.CreatedAt.Format(time.RFC1123Z),
+		})
+	}
+	err = xml.NewEncoder(w).Encode(rss)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (reader *Reader) AomXML(w http.ResponseWriter, r *http.Request) {
+	posts, err := reader.GetPosts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	atom := feed.AtomFeed{
+		Title:   feed.AtomText{Data: "Reader"},
+		Updated: time.Now().Format(time.RFC3339),
+		Generator: feed.AtomGenerator{
+			Name:    "Reader",
+			Version: "1.0.0",
+			URI:     "https://github.com/song940/feedreader",
+		},
+	}
+	for _, post := range posts {
+		atom.Entries = append(atom.Entries, feed.AtomEntry{
+			ID:      fmt.Sprintf("%d", post.Id),
+			Title:   feed.AtomText{Data: post.Title},
+			Content: feed.AtomText{Data: post.Content, Type: "html"},
+			Links:   []feed.AtomLink{{Href: post.Link}},
+			Updated: post.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	err = xml.NewEncoder(w).Encode(atom)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (reader *Reader) OpmlXML(w http.ResponseWriter, r *http.Request) {
+	subscriptions, err := reader.GetSubscriptions()
+	out := &opml.OPML{
+		Title:     "Reader",
+		CreatedAt: time.Now(),
+	}
+	for _, subscription := range subscriptions {
+		out.Outlines = append(out.Outlines, opml.Outline{
+			Type:    subscription.Type,
+			Title:   subscription.Name,
+			Text:    subscription.Name,
+			HTMLURL: subscription.Home,
+			XMLURL:  subscription.Link,
+		})
+	}
+
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	xml.NewEncoder(w).Encode(out)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

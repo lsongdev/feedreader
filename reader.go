@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"html/template"
 	"log"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 
 type Feed struct {
 	Id        int
+	Type      string
 	Name      string
 	Home      string
 	Link      string
@@ -21,7 +21,7 @@ type Feed struct {
 type Post struct {
 	Id        int
 	Title     string
-	Content   template.HTML
+	Content   string
 	Link      string
 	CreatedAt time.Time
 
@@ -48,6 +48,7 @@ func NewReader() (reader *Reader, err error) {
 	if _, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS subscriptions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			type TEXT,
 			name TEXT,
 			home TEXT,
 			link TEXT,
@@ -83,10 +84,10 @@ func NewReader() (reader *Reader, err error) {
 }
 
 // CreateFeed adds a new subscription to the database.
-func (reader *Reader) CreateFeed(name, home, link string) (id int, err error) {
+func (reader *Reader) CreateSubscription(feedType, name, home, link string) (id int, err error) {
 	err = reader.db.QueryRow(`
-		INSERT INTO subscriptions (name, home, link) VALUES (?, ?, ?) RETURNING id
-	`, name, home, link).Scan(&id)
+		INSERT INTO subscriptions (type, name, home, link) VALUES (?, ?, ?, ?) RETURNING id
+	`, feedType, name, home, link).Scan(&id)
 	return id, err
 }
 
@@ -100,31 +101,13 @@ func (reader *Reader) CreatePost(subscriptionID int, title, content, link, pubDa
 }
 
 // GetEntriesByCriteria retrieves entries (subscriptions or posts) based on the provided filter.
-func (reader *Reader) GetFeedsByFilter(filter string, value interface{}) ([]*Feed, error) {
-	var query string
-	switch filter {
-	case "id":
-		query = `
-		SELECT id, name, home, link, created_at
-		FROM subscriptions
-		WHERE id = ? 
-		ORDER BY created_at DESC
-	`
-	default:
-		query = `
-		SELECT id, name, home, link, created_at
-		FROM subscriptions
-		ORDER BY created_at DESC
-	`
-	}
+func (reader *Reader) GetSubscriptionsByFilter(filter string) ([]*Feed, error) {
 	var rows *sql.Rows
-	var err error
-	if filter != "" {
-		rows, err = reader.db.Query(query, value)
-	} else {
-		rows, err = reader.db.Query(query)
-	}
-
+	rows, err := reader.db.Query(fmt.Sprintf(`
+	SELECT id, type, name, home, link, created_at
+	FROM subscriptions 
+	%s
+	ORDER BY created_at DESC`, filter))
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +115,7 @@ func (reader *Reader) GetFeedsByFilter(filter string, value interface{}) ([]*Fee
 	var entries []*Feed
 	for rows.Next() {
 		var feed Feed
-		err := rows.Scan(&feed.Id, &feed.Name, &feed.Home, &feed.Link, &feed.CreatedAt)
+		err := rows.Scan(&feed.Id, &feed.Type, &feed.Name, &feed.Home, &feed.Link, &feed.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -142,13 +125,13 @@ func (reader *Reader) GetFeedsByFilter(filter string, value interface{}) ([]*Fee
 }
 
 // GetFeeds retrieves all subscriptions from the database.
-func (reader *Reader) GetFeeds() ([]*Feed, error) {
-	return reader.GetFeedsByFilter("", nil)
+func (reader *Reader) GetSubscriptions() ([]*Feed, error) {
+	return reader.GetSubscriptionsByFilter("")
 }
 
 // GetFeed retrieves a specific subscription from the database.
-func (reader *Reader) GetFeed(id int) (feed *Feed, err error) {
-	entries, err := reader.GetFeedsByFilter("id", id)
+func (reader *Reader) GetSubscription(id int) (feed *Feed, err error) {
+	entries, err := reader.GetSubscriptionsByFilter(fmt.Sprintf("WHERE id = %d", id))
 	if err != nil {
 		return
 	}
@@ -231,27 +214,41 @@ func (reader *Reader) GetPostsBySubscriptionId(id string) ([]*Post, error) {
 }
 
 // updateSubscriptionPosts fetches new articles for a subscription and saves them to the database.
-func (reader *Reader) updateSubscriptionPosts(id int) error {
-	subscrition, err := reader.GetFeed(id)
+func (reader *Reader) updateSubscriptionPosts(id int) (err error) {
+	subscrition, err := reader.GetSubscription(id)
 	if err != nil {
-		return err
+		return
 	}
 	log.Println("Updating posts for subscription", subscrition.Id, subscrition.Link)
-	rss, err := feed.FetchRss(subscrition.Link)
-	if err != nil {
-		return err
+	switch subscrition.Type {
+	case "atom":
+		atom, err := feed.FetchAtom(subscrition.Link)
+		if err != nil {
+			return err
+		}
+		for _, entry := range atom.Entries {
+			reader.CreatePost(id, entry.Title.Data, entry.Content.Data, entry.Links[0].Href, entry.Updated)
+		}
+	case "rss":
+		rss, err := feed.FetchRss(subscrition.Link)
+		if err != nil {
+			return err
+		}
+		for _, article := range rss.Items {
+			reader.CreatePost(id, article.Title, article.Description, article.Link, article.PubDate)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown subscription type: %s", subscrition.Type)
 	}
-	for _, article := range rss.Items {
-		reader.CreatePost(id, article.Title, article.Description, article.Link, article.PubDate)
-	}
-	return nil
+	return
 }
 
 // updatePostsPeriodically periodically updates posts for all subscriptions.
 func (reader *Reader) updatePostsPeriodically() {
 	for range reader.tick.C {
 		// Get all subscriptions and update posts for each
-		subscriptions, err := reader.GetFeeds()
+		subscriptions, err := reader.GetSubscriptions()
 		if err != nil {
 			log.Println("Error getting subscriptions:", err)
 			continue
