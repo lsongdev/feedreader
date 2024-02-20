@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/glebarez/go-sqlite v1.21.2
-	github.com/song940/feedparser-go v0.0.0-20231205100823-b114d7a779bc
+	github.com/song940/feedparser-go v0.0.0-20240220164546-971b915729c3
 )
 
 require (

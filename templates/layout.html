@@ -12,6 +12,10 @@
     ul.list {
       padding: 0;
     }
+    .container{
+      padding-top: 10px;
+      padding-bottom: 100px;
+    }
   </style>
 </head>
 
@@ -20,8 +24,10 @@
     <h1><a href="/">Reader</a></h1>
     <nav>
       <a href="/">home</a>
-      <a href="/feeds">feeds</a>
-      <a href="/new">subscribe</a>
+      <a href="/subscriptions">subscriptions</a>
+      <!-- <a href="/posts">posts</a> -->
+      <a href="/new">[+]</a>
+      <a href="/subscriptions.xml">[xml]</a>
     </nav>
     <main>
       {{template "page" .}}
