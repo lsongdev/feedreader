@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"encoding/xml"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -33,91 +34,6 @@ func (reader Reader) Render(w http.ResponseWriter, templateName string, data H) 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-}
-
-// FeedView handles requests to the feed page.
-func (reader *Reader) SubscriptionsView(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		subscriptions, err := reader.GetSubscriptions()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		reader.Render(w, "feeds", H{
-			"subscriptions": subscriptions,
-		})
-		return
-	}
-	subscriptionID, err := strconv.Atoi(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	subscription, err := reader.GetSubscription(subscriptionID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	posts, err := reader.GetPostsBySubscriptionId(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	reader.Render(w, "posts", H{
-		"subscription": subscription,
-		"posts":        posts,
-	})
-}
-
-func (reader *Reader) SubscriptionsXML(w http.ResponseWriter, r *http.Request) {
-	subscriptions, err := reader.GetSubscriptions()
-	var outlines []opml.Outline
-	for _, subscription := range subscriptions {
-		outlines = append(outlines, opml.Outline{
-			Type:    subscription.Type,
-			Title:   subscription.Name,
-			Text:    subscription.Name,
-			HTMLURL: subscription.Home,
-			XMLURL:  subscription.Link,
-		})
-	}
-	out := &opml.OPML{
-		Title:     "Reader",
-		CreatedAt: time.Now(),
-		Outlines:  outlines,
-	}
-	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
-	xml.NewEncoder(w).Encode(out)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-// PostView handles requests to view a specific post.
-func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		posts, err := reader.GetPosts()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		// Render the template with the data
-		reader.Render(w, "posts", H{
-			"posts": posts,
-		})
-		return
-	}
-	post, err := reader.GetPost(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	reader.Render(w, "post", H{
-		"post": post,
-	})
 }
 
 // IndexView handles requests to the home page.
@@ -170,4 +86,146 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		"link": link,
 		"url":  url,
 	})
+}
+
+// FeedView handles requests to the feed page.
+func (reader *Reader) SubscriptionsView(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		subscriptions, err := reader.GetSubscriptions()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		reader.Render(w, "feeds", H{
+			"subscriptions": subscriptions,
+		})
+		return
+	}
+	subscriptionID, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	subscription, err := reader.GetSubscription(subscriptionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	posts, err := reader.GetPostsBySubscriptionId(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	reader.Render(w, "posts", H{
+		"subscription": subscription,
+		"posts":        posts,
+	})
+}
+
+// PostView handles requests to view a specific post.
+func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		posts, err := reader.GetPosts()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// Render the template with the data
+		reader.Render(w, "posts", H{
+			"posts": posts,
+		})
+		return
+	}
+	post, err := reader.GetPost(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	reader.Render(w, "post", H{
+		"post": post,
+		"body": template.HTML(post.Content),
+	})
+}
+
+func (reader *Reader) RssXML(w http.ResponseWriter, r *http.Request) {
+	posts, err := reader.GetPosts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	rss := feed.RssFeed{
+		Title: "Reader",
+	}
+	for _, post := range posts {
+		rss.Items = append(rss.Items, feed.RssItem{
+			Title:       post.Title,
+			Description: post.Content,
+			Link:        post.Link,
+			PubDate:     post.CreatedAt.Format(time.RFC1123Z),
+		})
+	}
+	err = xml.NewEncoder(w).Encode(rss)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (reader *Reader) AomXML(w http.ResponseWriter, r *http.Request) {
+	posts, err := reader.GetPosts()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	atom := feed.AtomFeed{
+		Title:   feed.AtomText{Data: "Reader"},
+		Updated: time.Now().Format(time.RFC3339),
+		Generator: feed.AtomGenerator{
+			Name:    "Reader",
+			Version: "1.0.0",
+			URI:     "https://github.com/song940/feedreader",
+		},
+	}
+	for _, post := range posts {
+		atom.Entries = append(atom.Entries, feed.AtomEntry{
+			ID:      fmt.Sprintf("%d", post.Id),
+			Title:   feed.AtomText{Data: post.Title},
+			Content: feed.AtomText{Data: post.Content, Type: "html"},
+			Links:   []feed.AtomLink{{Href: post.Link}},
+			Updated: post.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	err = xml.NewEncoder(w).Encode(atom)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (reader *Reader) OpmlXML(w http.ResponseWriter, r *http.Request) {
+	subscriptions, err := reader.GetSubscriptions()
+	out := &opml.OPML{
+		Title:     "Reader",
+		CreatedAt: time.Now(),
+	}
+	for _, subscription := range subscriptions {
+		out.Outlines = append(out.Outlines, opml.Outline{
+			Type:    subscription.Type,
+			Title:   subscription.Name,
+			Text:    subscription.Name,
+			HTMLURL: subscription.Home,
+			XMLURL:  subscription.Link,
+		})
+	}
+
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	xml.NewEncoder(w).Encode(out)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

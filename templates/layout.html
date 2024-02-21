@@ -9,10 +9,12 @@
   <style>
     @import "https://lsong.org/css/stylesheet.css";
     @import "https://blog.lsong.org/css/yue.css";
+
     ul.list {
       padding: 0;
     }
-    .container{
+
+    .container {
       padding-top: 10px;
       padding-bottom: 100px;
     }
@@ -23,11 +25,12 @@
   <div class="container">
     <h1><a href="/">Reader</a></h1>
     <nav>
-      <a href="/">home</a>
+      <a href="/posts">posts</a>
       <a href="/subscriptions">subscriptions</a>
-      <!-- <a href="/posts">posts</a> -->
       <a href="/new">[+]</a>
-      <a href="/subscriptions.xml">[xml]</a>
+      <a href="/rss.xml">[rss]</a>
+      <a href="/atom.xml">[atom]</a>
+      <a href="/opml.xml">[opml]</a>
     </nav>
     <main>
       {{template "page" .}}

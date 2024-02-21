@@ -11,10 +11,8 @@ github.com/mattn/go-isatty v0.0.17/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/
 github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
-github.com/song940/feedparser-go v0.0.0-20231205100823-b114d7a779bc h1:nD+sitXIDtZEyRO5Skw8Tz1i/ss2IcP57yepENmv2yM=
-github.com/song940/feedparser-go v0.0.0-20231205100823-b114d7a779bc/go.mod h1:516xGlEq1IUucHrFg7nWC/Y9FBNib5coQiqCKFu0A7c=
-github.com/song940/feedparser-go v0.0.0-20240220164546-971b915729c3 h1:oBIshvi3X26IRX4pSS4sGqothUkFQBOw3OwOK675bVg=
-github.com/song940/feedparser-go v0.0.0-20240220164546-971b915729c3/go.mod h1:516xGlEq1IUucHrFg7nWC/Y9FBNib5coQiqCKFu0A7c=
+github.com/song940/feedparser-go v0.0.0-20240221033934-60824cd8cfe6 h1:2v63qtvolib4g9AxY+R1daqU/1NJNQ/PLvM8A57d6jQ=
+github.com/song940/feedparser-go v0.0.0-20240221033934-60824cd8cfe6/go.mod h1:/k8QoFfeRkL4X11Kek7kztz4iMkmz+JgWtjfFWUi6Rs=
 golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.7.0 h1:3jlCCIQZPdOYu1h8BkNvLz8Kgwtae2cagcG/VamtZRU=
 golang.org/x/sys v0.7.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=

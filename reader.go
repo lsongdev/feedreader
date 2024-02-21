@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"html/template"
 	"log"
 	"time"
 
@@ -22,7 +21,7 @@ type Feed struct {
 type Post struct {
 	Id        int
 	Title     string
-	Content   template.HTML
+	Content   string
 	Link      string
 	CreatedAt time.Time
 
