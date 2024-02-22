@@ -1,7 +1,6 @@
-package main
+package reader
 
 import (
-	"embed"
 	"encoding/xml"
 	"fmt"
 	"html/template"
@@ -11,25 +10,22 @@ import (
 
 	"github.com/song940/feedparser-go/feed"
 	"github.com/song940/feedparser-go/opml"
+	"github.com/song940/feedreader/templates"
 )
-
-//go:embed templates/*.html
-var templatefiles embed.FS
 
 type H map[string]interface{}
 
 // Render renders an HTML template with the provided data.
-func (reader Reader) Render(w http.ResponseWriter, templateName string, data H) {
+func (reader *Reader) Render(w http.ResponseWriter, templateName string, data H) {
 	// tmpl, err := template.ParseFiles("templates/layout.html", "templates/"+templateName+".html")
 	// Parse templates from embedded file system
-	tmpl, err := template.New("").ParseFS(templatefiles, "templates/layout.html", "templates/"+templateName+".html")
+	tmpl, err := template.New("").ParseFS(templates.Files, "layout.html", templateName+".html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Execute "index.html" within the layout and write to response
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	err = tmpl.ExecuteTemplate(w, "layout", data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -48,7 +44,7 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		name := r.FormValue("name")
 		home := r.FormValue("home")
 		link := r.FormValue("link")
-		id, err := reader.CreateSubscription(feedType, name, home, link)
+		id, err := reader.CreateFeed(feedType, name, home, link)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -89,36 +85,36 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 }
 
 // FeedView handles requests to the feed page.
-func (reader *Reader) SubscriptionsView(w http.ResponseWriter, r *http.Request) {
+func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		subscriptions, err := reader.GetSubscriptions()
+		feeds, err := reader.GetFeeds(nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		reader.Render(w, "feeds", H{
-			"subscriptions": subscriptions,
+			"subscriptions": feeds,
 		})
 		return
 	}
-	subscriptionID, err := strconv.Atoi(id)
+	feedId, err := strconv.Atoi(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	subscription, err := reader.GetSubscription(subscriptionID)
+	feed, err := reader.GetFeed(feedId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	posts, err := reader.GetPostsBySubscriptionId(id)
+	posts, err := reader.GetPostsByFeedId(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	reader.Render(w, "posts", H{
-		"subscription": subscription,
+		"subscription": feed,
 		"posts":        posts,
 	})
 }
@@ -127,7 +123,7 @@ func (reader *Reader) SubscriptionsView(w http.ResponseWriter, r *http.Request) 
 func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		posts, err := reader.GetPosts()
+		posts, err := reader.GetPosts(nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -150,7 +146,7 @@ func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) RssXML(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts()
+	posts, err := reader.GetPosts(nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -175,7 +171,7 @@ func (reader *Reader) RssXML(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) AomXML(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts()
+	posts, err := reader.GetPosts(nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -207,7 +203,7 @@ func (reader *Reader) AomXML(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) OpmlXML(w http.ResponseWriter, r *http.Request) {
-	subscriptions, err := reader.GetSubscriptions()
+	subscriptions, err := reader.GetFeeds(nil)
 	out := &opml.OPML{
 		Title:     "Reader",
 		CreatedAt: time.Now(),

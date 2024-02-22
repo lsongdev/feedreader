@@ -4,7 +4,7 @@
 <ul class="list">
   {{range $i, $subscription := .subscriptions}}
   <li>
-    <a href="/subscriptions?id={{$subscription.Id}}">{{$subscription.Name}}</a>
+    <a href="/feeds?id={{$subscription.Id}}">{{$subscription.Name}}</a>
   </li>
   {{end}}
 </ul>
