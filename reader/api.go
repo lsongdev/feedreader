@@ -5,7 +5,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/song940/fever-go/fever"
 )
@@ -61,21 +60,6 @@ func (r *Reader) FeverFeeds() (response fever.FeedsResponse) {
 	return response
 }
 
-func parseTime(str string) (t time.Time, err error) {
-	layouts := []string{
-		time.RFC3339,
-		time.RFC1123Z,
-	}
-	for _, layout := range layouts {
-		t, err := time.Parse(layout, str)
-		if err == nil {
-			return t, nil
-		}
-	}
-	err = fmt.Errorf("could not parse time: %s", str)
-	return
-}
-
 func (r *Reader) FeverItems(req *fever.ItemRequest) (response fever.ItemsResponse) {
 	conditions := make([]string, 0)
 	if req.SinceId != "" {
@@ -99,7 +83,6 @@ func (r *Reader) FeverItems(req *fever.ItemRequest) (response fever.ItemsRespons
 	response.Total = len(posts)
 	response.Items = make([]fever.Item, 0, len(posts))
 	for _, post := range posts {
-		t, _ := parseTime(post.PubDate)
 		response.Items = append(response.Items, fever.Item{
 			ID:        int64(post.Id),
 			FeedID:    int64(post.Feed.Id),
@@ -107,9 +90,9 @@ func (r *Reader) FeverItems(req *fever.ItemRequest) (response fever.ItemsRespons
 			Title:     post.Title,
 			HTML:      post.Content,
 			URL:       post.Link,
-			IsRead:    b2i(post.Readed),
-			IsSaved:   b2i(post.Starred),
-			CreatedAt: t.Unix(),
+			IsRead:    b2i(post.IsRead),
+			IsSaved:   b2i(post.IsSaved),
+			CreatedAt: post.PubDate.Unix(),
 		})
 	}
 	return response
@@ -117,7 +100,7 @@ func (r *Reader) FeverItems(req *fever.ItemRequest) (response fever.ItemsRespons
 
 func (r *Reader) FeverUnreadItemIds() (response fever.UnreadResponse) {
 	postIds := make([]string, 0)
-	rows, err := r.db.Query("SELECT id FROM posts WHERE readed = 0")
+	rows, err := r.db.Query("SELECT id FROM posts WHERE is_read = 0")
 	if err != nil {
 		log.Fatalf("Failed to get unread posts: %v", err)
 		return
@@ -137,7 +120,7 @@ func (r *Reader) FeverUnreadItemIds() (response fever.UnreadResponse) {
 
 func (r *Reader) FeverSavedItemIds() (response fever.SavedResponse) {
 	postIds := make([]string, 0)
-	rows, err := r.db.Query("SELECT id FROM posts WHERE starred = 1")
+	rows, err := r.db.Query("SELECT id FROM posts WHERE is_saved = 1")
 	if err != nil {
 		log.Fatalf("Failed to get saved posts: %v", err)
 		return
@@ -156,17 +139,18 @@ func (r *Reader) FeverSavedItemIds() (response fever.SavedResponse) {
 }
 
 func (r *Reader) FeverMark(req *fever.MarkRequest) (response fever.MarkResponse) {
+	log.Println("Marking item", req.Type, req.Id, "as", req.As)
 	updates := make([]string, 0)
 	if req.Type == "item" {
 		switch req.As {
 		case "read":
-			updates = append(updates, "readed = 1")
+			updates = append(updates, "is_read = 1")
 		case "unread":
-			updates = append(updates, "readed = 0")
+			updates = append(updates, "is_read = 0")
 		case "saved":
-			updates = append(updates, "starred = 1")
+			updates = append(updates, "is_saved = 1")
 		case "unsaved":
-			updates = append(updates, "starred = 0")
+			updates = append(updates, "is_saved = 0")
 		}
 		err := r.UpdatePost(req.Id, updates)
 		if err != nil {

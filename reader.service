@@ -1,0 +1,11 @@
+[Unit]
+Description=FeedReader - Self-hosted RSS Feed Aggregator Service
+Documentation=https://github.com/song940/feedreader
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+
+[Service]
+ExecStart=/usr/local/bin/feedreader
+
+[Install]
+WantedBy=multi-user.target

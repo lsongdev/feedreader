@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -145,6 +146,31 @@ func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 		"post": post,
 		"body": template.HTML(post.Content),
 	})
+}
+
+func (reader *Reader) ImportView(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		reader.Render(w, "import", nil)
+		return
+	}
+	r.ParseMultipartForm(32 << 20)
+	f, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = reader.ImportOPML(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/feeds", http.StatusFound)
 }
 
 func (reader *Reader) RssXML(w http.ResponseWriter, r *http.Request) {
