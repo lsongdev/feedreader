@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/song940/feedparser-go/feed"
+	"github.com/song940/feedparser-go/opml"
 )
 
 type Feed struct {
@@ -27,9 +28,9 @@ type Post struct {
 	Title     string
 	Content   string
 	Link      string
-	Starred   bool
-	Readed    bool
-	PubDate   string
+	IsSaved   bool
+	IsRead    bool
+	PubDate   time.Time
 	CreatedAt time.Time
 }
 
@@ -68,16 +69,17 @@ func NewReader() (reader *Reader, err error) {
 	if _, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS posts (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			entry_id TEXT,
 			title TEXT,
 			content TEXT,
 			link TEXT,
-			readed BOOLEAN DEFAULT 0,
-			starred BOOLEAN DEFAULT 0,
-			pub_date TEXT,
+			pub_date DATETIME,
+			is_read BOOLEAN DEFAULT 0,
+			is_saved BOOLEAN DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			feed_id INTEGER,
 			FOREIGN KEY (feed_id) REFERENCES feeds (id),
-			UNIQUE (link)
+			UNIQUE (entry_id, feed_id)
 		)
 	`); err != nil {
 		return nil, err
@@ -91,6 +93,20 @@ func NewReader() (reader *Reader, err error) {
 	return
 }
 
+func (reader *Reader) ImportOPML(data []byte) (err error) {
+	res, err := opml.ParseOPML(data)
+	if err != nil {
+		return
+	}
+	for _, outline := range res.Outlines {
+		_, err = reader.CreateFeed(outline.Type, outline.Title, outline.HTMLURL, outline.XMLURL)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 // CreateFeed adds a new subscription to the database.
 func (reader *Reader) CreateFeed(feedType, name, home, link string) (id int, err error) {
 	err = reader.db.QueryRow(`
@@ -99,29 +115,50 @@ func (reader *Reader) CreateFeed(feedType, name, home, link string) (id int, err
 	return id, err
 }
 
+func parseTime(str string) (t time.Time, err error) {
+	layouts := []string{
+		time.RFC3339,
+		time.RFC1123,
+		time.RFC1123Z,
+		"Monday, 02 Jan 2006 15:04:05 -07:00",
+	}
+	for _, layout := range layouts {
+		t, err := time.Parse(layout, str)
+		if err == nil {
+			return t, nil
+		}
+	}
+	err = fmt.Errorf("could not parse time: %s", str)
+	return
+}
+
 // CreatePost adds a new post to the database.
-func (reader *Reader) CreatePost(feedId int, title, content, link, pubDate string) error {
-	_, err := reader.db.Exec(`
-		INSERT INTO posts (title, content, link, pub_date, feed_id) VALUES (?, ?, ?, ?, ?)
-	`, title, content, link, pubDate, feedId)
+func (reader *Reader) CreatePost(feedId int, id, title, content, link string, pubDate string) error {
+	t, err := parseTime(pubDate)
+	if err != nil {
+		log.Println("pubDate", pubDate, t, err)
+		return err
+	}
+	_, err = reader.db.Exec(`
+		INSERT INTO posts (entry_id, title, content, link, pub_date, feed_id) VALUES (?, ?, ?, ?, ?, ?)
+	`, id, title, content, link, t, feedId)
 	return err
 }
 
 // GetEntriesByCriteria retrieves entries (subscriptions or posts) based on the provided filter.
-func (reader *Reader) GetFeeds(conditions []string) ([]*Feed, error) {
+func (reader *Reader) GetFeeds(conditions []string) (entries []*Feed, err error) {
 	var filter string
 	if len(conditions) > 0 {
 		filter = "WHERE " + strings.Join(conditions, " AND ")
 	}
 	rows, err := reader.db.Query(fmt.Sprintf(`
-	SELECT id, type, name, home, link, created_at
-	FROM feeds %s
-	ORDER BY created_at DESC`, filter))
+		SELECT id, type, name, home, link, created_at
+		FROM feeds %s
+		ORDER BY created_at DESC`, filter))
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer rows.Close()
-	var entries []*Feed
 	for rows.Next() {
 		var feed Feed
 		err := rows.Scan(&feed.Id, &feed.Type, &feed.Name, &feed.Home, &feed.Link, &feed.CreatedAt)
@@ -130,7 +167,7 @@ func (reader *Reader) GetFeeds(conditions []string) ([]*Feed, error) {
 		}
 		entries = append(entries, &feed)
 	}
-	return entries, nil
+	return
 }
 
 // GetFeed retrieves a specific subscription from the database.
@@ -151,7 +188,7 @@ func (reader *Reader) GetFeed(id int) (feed *Feed, err error) {
 func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
 	conditions = append(conditions, "p.feed_id = s.id")
 	sql := fmt.Sprintf(`
-		SELECT p.id, p.title, p.content, p.link, p.readed, p.starred, p.pub_date, p.created_at, s.id, s.name, s.home
+		SELECT p.id, p.title, p.content, p.link, p.is_read, p.is_saved, p.pub_date, p.created_at, s.id, s.name, s.home
 		FROM posts p, feeds s
 		WHERE %s
 		ORDER BY p.created_at DESC
@@ -166,7 +203,7 @@ func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
 		post.Feed = Feed{}
 		err := rows.Scan(
 			&post.Id, &post.Title, &post.Content, &post.Link,
-			&post.Readed, &post.Starred,
+			&post.IsRead, &post.IsSaved,
 			&post.PubDate, &post.CreatedAt,
 			&post.Feed.Id, &post.Feed.Name, &post.Feed.Home)
 		if err != nil {
@@ -202,8 +239,8 @@ func (reader *Reader) UpdatePost(id int, updates []string) error {
 }
 
 // updateSubscriptionPosts fetches new articles for a subscription and saves them to the database.
-func (reader *Reader) updateSubscriptionPosts(id int) (err error) {
-	subscrition, err := reader.GetFeed(id)
+func (reader *Reader) updateSubscriptionPosts(feedId int) (err error) {
+	subscrition, err := reader.GetFeed(feedId)
 	if err != nil {
 		return
 	}
@@ -215,7 +252,8 @@ func (reader *Reader) updateSubscriptionPosts(id int) (err error) {
 			return err
 		}
 		for _, entry := range atom.Entries {
-			reader.CreatePost(id, entry.Title.Data, entry.Content.Data, entry.Links[0].Href, entry.Updated)
+			content := entry.GetContent()
+			reader.CreatePost(feedId, entry.ID, entry.Title.Data, content, entry.Links[0].Href, entry.Updated)
 		}
 	case "rss":
 		rss, err := feed.FetchRss(subscrition.Link)
@@ -223,7 +261,12 @@ func (reader *Reader) updateSubscriptionPosts(id int) (err error) {
 			return err
 		}
 		for _, article := range rss.Items {
-			reader.CreatePost(id, article.Title, article.Description, article.Link, article.PubDate)
+			id := article.Guid.Value
+			if id == "" {
+				id = article.Link
+			}
+			content := article.GetContent()
+			reader.CreatePost(feedId, id, article.Title, content, article.Link, article.PubDate)
 		}
 		return nil
 	default:
