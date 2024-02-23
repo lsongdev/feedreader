@@ -15,8 +15,7 @@
     }
 
     .container {
-      padding-top: 10px;
-      padding-bottom: 100px;
+      padding: 10px 30px 100px 30px;
     }
   </style>
 </head>
@@ -32,9 +31,7 @@
       <a href="/atom.xml">[atom]</a>
       <a href="/opml.xml">[opml]</a>
       {{ if .post }}
-      <a href="/set?id={{.post.Id}}&star=1">[star]</a>
-      <a href="/set?id={{.post.Id}}&read=1">[read]</a>
-      <a href="/set?id={{.post.Id}}&read=0">[unread]</a>
+      <!-- <a href="/set?id={{.post.Id}}&read=0">[unread]</a> -->
       {{ end }}
     </nav>
     <main>
