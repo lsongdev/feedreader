@@ -132,6 +132,7 @@ func (r *Reader) FeverUnreadItemIds() (response fever.UnreadResponse) {
 		postIds = append(postIds, id)
 	}
 	response.ItemIDs = strings.Join(postIds, ",")
+	log.Println("Unread item ids:", response.ItemIDs)
 	return response
 }
 
@@ -156,6 +157,7 @@ func (r *Reader) FeverSavedItemIds() (response fever.SavedResponse) {
 }
 
 func (r *Reader) FeverMark(req *fever.MarkRequest) (response fever.MarkResponse) {
+	log.Println("Marking item", req.Type, req.Id, "as", req.As)
 	updates := make([]string, 0)
 	if req.Type == "item" {
 		switch req.As {
