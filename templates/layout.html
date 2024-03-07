@@ -5,7 +5,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reader</title>
+  <title>{{.AppName}}</title>
   <style>
     @import "https://lsong.org/css/stylesheet.css";
     @import "https://blog.lsong.org/css/yue.css";
@@ -17,15 +17,25 @@
     .container {
       padding: 10px 30px 100px 30px;
     }
+
+    .form-field {
+      margin-bottom: 5px;
+    }
+    article {
+      overflow: hidden;
+      white-space: wrap;
+    }
   </style>
+  <style>{{.Stylesheet}}</style>
 </head>
 
 <body>
   <div class="container">
-    <h1><a href="/">Reader</a></h1>
+    <h1><a href="/">{{.AppName}}</a></h1>
     <nav>
       <a href="/posts">posts</a>
       <a href="/feeds">feeds</a>
+      <a href="/groups">groups</a>
       <a href="/new">[+]</a>
       <a href="/rss.xml">[rss]</a>
       <a href="/atom.xml">[atom]</a>

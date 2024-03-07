@@ -1,11 +1,12 @@
 {{define "page"}}
-<article class="post yue">
+<div class="post yue">
   <h2><a href="{{.post.Link}}" target="_blank">{{.post.Title}}</a></h2>
+  <a href="/groups?id={{.post.Feed.Group.Id}}" >{{.post.Feed.Group.Name}}</a>
   <time>{{.post.PubDate}}</time> |
   <a href="/feeds?id={{.post.Feed.Id}}">{{.post.Feed.Name}}</a>
 
   <article>
     {{.body}}
   </article>
-</article>
+</div>
 {{end}}

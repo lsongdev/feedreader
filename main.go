@@ -5,41 +5,42 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"time"
 
 	"github.com/song940/feedreader/reader"
 	"github.com/song940/fever-go/fever"
 )
 
 func main() {
-	var root, addr string
-	userconfig, err := os.UserConfigDir()
+	config := reader.NewConfig()
+	conf, err := os.UserConfigDir()
 	if err != nil {
-		panic(err)
+		conf = "/etc"
 	}
-	root = path.Join(userconfig, "feedreader")
-	flag.StringVar(&root, "d", root, "working directory")
-	flag.StringVar(&addr, "l", ":8080", "address to listen")
+	dir := path.Join(conf, "feedreader")
+	flag.StringVar(&config.Dir, "d", dir, "config directory")
 	flag.Parse()
+	config.Load()
 
-	server, err := reader.NewReader(&reader.Config{
-		Dir:      root,
-		Interval: 5 * time.Minute,
-	})
+	server, err := reader.NewReader(config)
 	if err != nil {
 		panic(err)
 	}
+
 	api := fever.New(server)
-	http.HandleFunc("/", server.IndexView)
-	http.HandleFunc("/new", server.NewView)
-	http.HandleFunc("/posts", server.PostView)
-	http.HandleFunc("/feeds", server.FeedView)
-	http.HandleFunc("/import", server.ImportView)
-	http.HandleFunc("/rss.xml", server.RssXML)
-	http.HandleFunc("/atom.xml", server.AomXML)
-	http.HandleFunc("/opml.xml", server.OpmlXML)
-	http.Handle("/fever/", api)
-	err = http.ListenAndServe(addr, nil)
+	router := http.NewServeMux()
+	router.HandleFunc("/", server.IndexView)
+	router.HandleFunc("/new", server.NewView)
+	router.HandleFunc("/posts", server.PostView)
+	router.HandleFunc("/feeds", server.FeedView)
+	router.HandleFunc("/groups", server.GroupView)
+	router.HandleFunc("/import", server.ImportView)
+	router.HandleFunc("/rss.xml", server.RssXml)
+	router.HandleFunc("/atom.xml", server.AomXml)
+	router.HandleFunc("/opml.xml", server.OpmlXml)
+	router.HandleFunc("/feeds.json", server.FeedsJson)
+	router.HandleFunc("/posts.json", server.PostsJson)
+	router.Handle("/fever/", api)
+	err = http.ListenAndServe(config.Listen, router)
 	if err != nil {
 		panic(err)
 	}
