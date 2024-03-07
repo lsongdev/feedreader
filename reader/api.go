@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"crypto/md5"
 	"fmt"
 	"log"
 	"strconv"
@@ -9,23 +10,43 @@ import (
 	"github.com/song940/fever-go/fever"
 )
 
+func (user *User) FeverAuthKey() string {
+	// md5(user.username +":"+ user.password)
+	str := fmt.Sprintf("%s:%s", user.Username, user.Password)
+	return fmt.Sprintf("%x", md5.Sum([]byte(str)))
+}
+
 // FeverAuthenticate implements fever.Handler.
-func (*Reader) FeverAuthenticate(apiKey string) bool {
-	return true
+func (r *Reader) FeverAuthenticate(apiKey string) bool {
+	for _, user := range r.config.Users {
+		if apiKey == user.FeverAuthKey() {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Reader) FeverGroups() (response fever.GroupsResponse) {
 	feeds, err := r.GetFeeds(nil)
 	if err != nil {
-		log.Fatalf("Failed to get subscriptions: %v", err)
+		log.Fatalf("Failed to get feeds: %v", err)
 		return
 	}
 	feedIds := make([]string, 0, len(feeds))
 	for _, feed := range feeds {
 		feedIds = append(feedIds, strconv.Itoa(int(feed.Id)))
 	}
-	response.Groups = []fever.Group{
-		{ID: 1, Title: "All"},
+	groups, err := r.GetGroups()
+	if err != nil {
+		log.Fatalf("Failed to get groups: %v", err)
+		return
+	}
+	response.Groups = make([]fever.Group, 0, len(groups))
+	for _, group := range groups {
+		response.Groups = append(response.Groups, fever.Group{
+			ID:    int64(group.Id),
+			Title: group.Name,
+		})
 	}
 	response.FeedsGroups = []fever.FeedsGroups{
 		{GroupID: 1, FeedIDs: strings.Join(feedIds, ",")},

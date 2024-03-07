@@ -14,31 +14,31 @@ import (
 	"github.com/song940/feedparser-go/opml"
 )
 
+type Group struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 type Feed struct {
-	Id        int
-	Type      string
-	Name      string
-	Home      string
-	Link      string
-	CreatedAt time.Time
+	Id        int       `json:"id"`
+	Type      string    `json:"type"`
+	Name      string    `json:"name"`
+	Home      string    `json:"home"`
+	Link      string    `json:"link"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Post struct {
 	Feed
 
-	Id        int
-	Title     string
-	Content   string
-	Link      string
-	IsSaved   bool
-	IsRead    bool
-	PubDate   time.Time
-	CreatedAt time.Time
-}
-
-type Config struct {
-	Dir      string
-	Interval time.Duration
+	Id        int       `json:"id"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	Link      string    `json:"link"`
+	IsSaved   bool      `json:"is_saved"`
+	IsRead    bool      `json:"is_read"`
+	PubDate   time.Time `json:"pub_date"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Reader represents the main application struct.
@@ -57,6 +57,15 @@ func NewReader(config *Config) (reader *Reader, err error) {
 	}
 	db, err := sql.Open("sqlite", file)
 	if err != nil {
+		return
+	}
+	if _, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS groups (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT,
+			UNIQUE (name)
+		)
+	`); err != nil {
 		return
 	}
 	// Create subscriptions table
@@ -94,7 +103,7 @@ func NewReader(config *Config) (reader *Reader, err error) {
 		return
 	}
 	// Initialize a ticker with a specified interval for periodic updates
-	tick := time.NewTicker(config.Interval)
+	tick := time.NewTicker(time.Minute * 5)
 	reader = &Reader{
 		config: config, db: db, tick: tick,
 	}
@@ -113,6 +122,40 @@ func (reader *Reader) ImportOPML(data []byte) (err error) {
 			return
 		}
 	}
+	return
+}
+
+func (reader *Reader) CreateGroup(name string) (id int, err error) {
+	err = reader.db.QueryRow(`
+		INSERT INTO groups (name) VALUES (?) RETURNING id
+	`, name).Scan(&id)
+	return
+}
+
+func (reader *Reader) GetGroups() (groups []*Group, err error) {
+	rows, err := reader.db.Query("SELECT id, name FROM groups")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var group Group
+		err := rows.Scan(&group.Id, &group.Name)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, &group)
+	}
+	return
+}
+
+func (reader *Reader) UpdateGroup(id int, name string) (err error) {
+	_, err = reader.db.Exec("UPDATE groups SET name = ? WHERE id = ?", name, id)
+	return
+}
+
+func (reader *Reader) DeleteGroup(id int) (err error) {
+	_, err = reader.db.Exec("DELETE FROM groups WHERE id = ?", id)
 	return
 }
 
