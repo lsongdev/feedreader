@@ -1,35 +1,58 @@
 {{define "page"}}
-<h2>Discover</h2>
 
+<h2>Discover</h2>
 <form action="/new">
   <div class="form-field">
-    <input type="url" name="url" placeholder="Website URL" required value="{{.url}}">
+    <input type="url" name="url" placeholder="Website URL" required value="{{.url}}" class="input">
   </div>
   <div class="form-field">
-    <input type="submit" value="Discover">
+    <input type="submit" value="Discover" class="button">
   </div>
 </form>
 
 <h2>Subscribe</h2>
-
 <form method="post" action="/new">
   <div class="form-field">
-    <select name="type" required>
+    <label for="type">Feed Type:</label>
+    <select name="type" required class="input">
       <option value="rss" {{if eq .type "rss"}}selected{{end}}>RSS</option>
       <option value="atom" {{if eq .type "atom"}}selected{{end}}>Atom</option>
     </select>
   </div>
   <div class="form-field">
-    <input type="text" name="name" placeholder="Title" required value="{{.name}}">
+    <label for="name">Feed Name:</label>
+    <input type="text" name="name" placeholder="Title" required value="{{.name}}" class="input">
   </div>
   <div class="form-field">
-    <input type="url" name="home" placeholder="Homepage" required value="{{.home}}">
+    <label for="home">Homepage:</label>
+    <input type="url" name="home" placeholder="Homepage" required value="{{.home}}" class="input">
   </div>
   <div class="form-field">
-    <input type="url" name="link" placeholder="Feed Link" required value="{{.link}}">
+    <label for="link">Feed Link</label>
+    <input type="url" name="link" placeholder="Feed Link" required value="{{.link}}" class="input">
   </div>
   <div class="form-field">
-    <input type="submit" value="Subscribe">
+    <label for="category">Category:</label>
+    <select name="category" id="category" class="input">
+      {{range .categories}}
+      <option value="{{.Id}}" >{{.Name}}</option>
+      {{end}}
+    </select>
+  </div>
+  <div class="form-field">
+    <input type="submit" value="Subscribe" class="button">
+  </div>
+  <p>Or <a href="/import">Import OPML</a></p>
+</form>
+
+<h2>Category</h2>
+<form method="post" action="/categories">
+  <div class="form-field">
+    <label for="name">Category Name:</label>
+    <input type="text" name="name" placeholder="Category Name" required class="input">
+  </div>
+  <div class="form-field">
+    <input type="submit" value="Create" class="button">
   </div>
 </form>
 {{end}}

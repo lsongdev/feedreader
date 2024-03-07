@@ -1,10 +1,20 @@
 {{define "page"}}
+<style>
+</style>
+
 <h2>Subscriptions</h2>
 
+<nav>
+<a href="/feeds">All</a>
+{{range $i, $category := .categories}}
+<a href="/feeds?category={{$category.Id}}" >{{$category.Name}}</a>
+{{end}}
+</nav>
+
 <ul class="list">
-  {{range $i, $subscription := .subscriptions}}
-  <li>
-    <a href="/feeds?id={{$subscription.Id}}">{{$subscription.Name}}</a>
+  {{range $i, $feed := .feeds}}
+  <li class="feed">
+    <a href="/feeds?id={{$feed.Id}}" >{{$feed.Name}}</a>
   </li>
   {{end}}
 </ul>
