@@ -15,6 +15,8 @@ github.com/song940/feedparser-go v0.0.0-20240223130218-14bcc1571069 h1:4+gpJBJl+
 github.com/song940/feedparser-go v0.0.0-20240223130218-14bcc1571069/go.mod h1:/k8QoFfeRkL4X11Kek7kztz4iMkmz+JgWtjfFWUi6Rs=
 github.com/song940/fever-go v0.0.0-20240222065552-1b87f4b59c91 h1:0ej6sHA3Xb0JSqqOcUmvRML+yLm/OPdR+mss09S8J+s=
 github.com/song940/fever-go v0.0.0-20240222065552-1b87f4b59c91/go.mod h1:Ox/T/hOL3vvkaINHo6cgcuLTh6nGCs8D0bYlIxlJ6qk=
+github.com/song940/fever-go v0.0.0-20240312064621-8877d03c4761 h1:w3yEYRPbZJkvPJk1Ye0VXqOBGTGBIqVXvis3JFTqPDk=
+github.com/song940/fever-go v0.0.0-20240312064621-8877d03c4761/go.mod h1:Ox/T/hOL3vvkaINHo6cgcuLTh6nGCs8D0bYlIxlJ6qk=
 golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.7.0 h1:3jlCCIQZPdOYu1h8BkNvLz8Kgwtae2cagcG/VamtZRU=
 golang.org/x/sys v0.7.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=

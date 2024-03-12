@@ -3,10 +3,10 @@
 
 <form action="/new">
   <div class="form-field">
-    <input type="url" name="url" placeholder="Website URL" required value="{{.url}}">
+    <input type="url" name="url" placeholder="Website URL" required value="{{.url}}" class="input">
   </div>
   <div class="form-field">
-    <input type="submit" value="Discover">
+    <input type="submit" value="Discover" class="button">
   </div>
 </form>
 
@@ -14,22 +14,34 @@
 
 <form method="post" action="/new">
   <div class="form-field">
-    <select name="type" required>
+    <label for="type">Feed Type:</label>
+    <select name="type" required class="input">
       <option value="rss" {{if eq .type "rss"}}selected{{end}}>RSS</option>
       <option value="atom" {{if eq .type "atom"}}selected{{end}}>Atom</option>
     </select>
   </div>
   <div class="form-field">
-    <input type="text" name="name" placeholder="Title" required value="{{.name}}">
+    <label for="group">Group:</label>
+    <select name="group" id="group" class="input">
+      {{range .groups}}
+      <option value="{{.Id}}" >{{.Name}}</option>
+      {{end}}
+    </select>
   </div>
   <div class="form-field">
-    <input type="url" name="home" placeholder="Homepage" required value="{{.home}}">
+    <label for="name">Feed Name:</label>
+    <input type="text" name="name" placeholder="Title" required value="{{.name}}" class="input">
   </div>
   <div class="form-field">
-    <input type="url" name="link" placeholder="Feed Link" required value="{{.link}}">
+    <label for="home">Homepage:</label>
+    <input type="url" name="home" placeholder="Homepage" required value="{{.home}}" class="input">
   </div>
   <div class="form-field">
-    <input type="submit" value="Subscribe">
+    <label for="link">Feed Link</label>
+    <input type="url" name="link" placeholder="Feed Link" required value="{{.link}}" class="input">
+  </div>
+  <div class="form-field">
+    <input type="submit" value="Subscribe" class="button">
   </div>
   <p>Or <a href="/import">Import OPML</a></p>
 </form>

@@ -109,17 +109,25 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		if !reader.CheckAuth(w, r) {
 			return
 		}
+		group := r.FormValue("group")
 		feedType := r.FormValue("type")
 		name := r.FormValue("name")
 		home := r.FormValue("home")
 		link := r.FormValue("link")
-		id, err := reader.CreateFeed(feedType, name, home, link)
+		groupId, _ := strconv.Atoi(group)
+		id, err := reader.CreateFeed(feedType, name, home, link, groupId)
 		if err != nil {
 			reader.Error(w, err)
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusFound)
 		go reader.updateSubscriptionPosts(id)
+		return
+	}
+
+	groups, err := reader.GetGroups()
+	if err != nil {
+		reader.Error(w, err)
 		return
 	}
 
@@ -145,16 +153,18 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reader.Render(w, "new", H{
-		"type": feedType,
-		"name": name,
-		"home": home,
-		"link": link,
-		"url":  url,
+		"groups": groups,
+		"type":   feedType,
+		"name":   name,
+		"home":   home,
+		"link":   link,
+		"url":    url,
 	})
 }
 
 // FeedView handles requests to the feed page.
 func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
+
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		feeds, err := reader.GetFeeds(nil)
@@ -212,6 +222,10 @@ func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 		"post": post,
 		"body": template.HTML(post.Content),
 	})
+}
+
+func (reader *Reader) GroupView(w http.ResponseWriter, r *http.Request) {
+	reader.Render(w, "groups", nil)
 }
 
 func (reader *Reader) ImportView(w http.ResponseWriter, r *http.Request) {

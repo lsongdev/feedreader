@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/glebarez/go-sqlite v1.21.2
 	github.com/song940/feedparser-go v0.0.0-20240223130218-14bcc1571069
-	github.com/song940/fever-go v0.0.0-20240222065552-1b87f4b59c91
+	github.com/song940/fever-go v0.0.0-20240312064621-8877d03c4761
 	gopkg.in/yaml.v2 v2.4.0
 )
 

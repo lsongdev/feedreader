@@ -31,6 +31,7 @@ func main() {
 	router.HandleFunc("/new", server.NewView)
 	router.HandleFunc("/posts", server.PostView)
 	router.HandleFunc("/feeds", server.FeedView)
+	router.HandleFunc("/groups", server.GroupView)
 	router.HandleFunc("/import", server.ImportView)
 	router.HandleFunc("/rss.xml", server.RssXml)
 	router.HandleFunc("/atom.xml", server.AomXml)
