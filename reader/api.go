@@ -37,13 +37,13 @@ func (r *Reader) FeverGroups() (response fever.GroupsResponse) {
 	for _, feed := range feeds {
 		feedIds = append(feedIds, strconv.Itoa(int(feed.Id)))
 	}
-	groups, err := r.GetGroups()
+	categories, err := r.GetCategories()
 	if err != nil {
-		log.Fatalf("Failed to get groups: %v", err)
+		log.Fatalf("Failed to get categories: %v", err)
 		return
 	}
-	response.Groups = make([]fever.Group, 0, len(groups))
-	for _, group := range groups {
+	response.Groups = make([]fever.Group, 0, len(categories))
+	for _, group := range categories {
 		response.Groups = append(response.Groups, fever.Group{
 			ID:    int64(group.Id),
 			Title: group.Name,
@@ -61,6 +61,7 @@ func (r *Reader) FeverFeeds() (response fever.FeedsResponse) {
 		log.Fatalf("Failed to get subscriptions: %v", err)
 		return
 	}
+	var groups map[int][]string = make(map[int][]string)
 	for _, feed := range feeds {
 		response.Feeds = append(response.Feeds, fever.Feed{
 			ID:          int64(feed.Id),
@@ -71,13 +72,12 @@ func (r *Reader) FeverFeeds() (response fever.FeedsResponse) {
 			IsSpark:     1,
 			LastUpdated: feed.CreatedAt.Unix(),
 		})
+		groups[feed.Category.Id] = append(groups[feed.Category.Id], strconv.Itoa(feed.Id))
 	}
-	feedIds := make([]string, 0, len(feeds))
-	for _, feed := range feeds {
-		feedIds = append(feedIds, strconv.Itoa(int(feed.Id)))
-	}
-	response.FeedsGroups = []fever.FeedsGroups{
-		{GroupID: 1, FeedIDs: strings.Join(feedIds, ",")},
+	for id, feedIds := range groups {
+		response.FeedsGroups = append(response.FeedsGroups, fever.FeedsGroups{
+			GroupID: int64(id), FeedIDs: strings.Join(feedIds, ","),
+		})
 	}
 	return response
 }

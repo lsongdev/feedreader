@@ -1,6 +1,6 @@
 {{define "page"}}
-<h2>Discover</h2>
 
+<h2>Discover</h2>
 <form action="/new">
   <div class="form-field">
     <input type="url" name="url" placeholder="Website URL" required value="{{.url}}" class="input">
@@ -11,21 +11,12 @@
 </form>
 
 <h2>Subscribe</h2>
-
 <form method="post" action="/new">
   <div class="form-field">
     <label for="type">Feed Type:</label>
     <select name="type" required class="input">
       <option value="rss" {{if eq .type "rss"}}selected{{end}}>RSS</option>
       <option value="atom" {{if eq .type "atom"}}selected{{end}}>Atom</option>
-    </select>
-  </div>
-  <div class="form-field">
-    <label for="group">Group:</label>
-    <select name="group" id="group" class="input">
-      {{range .groups}}
-      <option value="{{.Id}}" >{{.Name}}</option>
-      {{end}}
     </select>
   </div>
   <div class="form-field">
@@ -41,8 +32,27 @@
     <input type="url" name="link" placeholder="Feed Link" required value="{{.link}}" class="input">
   </div>
   <div class="form-field">
+    <label for="category">Category:</label>
+    <select name="category" id="category" class="input">
+      {{range .categories}}
+      <option value="{{.Id}}" >{{.Name}}</option>
+      {{end}}
+    </select>
+  </div>
+  <div class="form-field">
     <input type="submit" value="Subscribe" class="button">
   </div>
   <p>Or <a href="/import">Import OPML</a></p>
+</form>
+
+<h2>Category</h2>
+<form method="post" action="/categories">
+  <div class="form-field">
+    <label for="name">Category Name:</label>
+    <input type="text" name="name" placeholder="Category Name" required class="input">
+  </div>
+  <div class="form-field">
+    <input type="submit" value="Create" class="button">
+  </div>
 </form>
 {{end}}
