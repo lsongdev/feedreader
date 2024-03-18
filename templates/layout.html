@@ -25,6 +25,9 @@
       overflow: hidden;
       white-space: wrap;
     }
+    [method="delete"] {
+      color: red;
+    }
   </style>
   <style>{{.Stylesheet}}</style>
 </head>
@@ -35,14 +38,10 @@
     <nav>
       <a href="/posts">posts</a>
       <a href="/feeds">feeds</a>
-      <a href="/groups">groups</a>
       <a href="/new">[+]</a>
       <a href="/rss.xml">[rss]</a>
       <a href="/atom.xml">[atom]</a>
       <a href="/opml.xml">[opml]</a>
-      {{ if .post }}
-      <!-- <a href="/set?id={{.post.Id}}&read=0">[unread]</a> -->
-      {{ end }}
     </nav>
     <main>
       {{template "page" .}}

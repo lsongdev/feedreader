@@ -1,11 +1,24 @@
 {{define "page"}}
 <h2>
-{{ if .subscription }}
-<a href="{{.subscription.Home}}" target="_blank">{{.subscription.Name}}</a>
+{{ if .feed }}
+<a href="{{.feed.Home}}" target="_blank">{{.feed.Name}}</a>
 {{else}}
 Posts
 {{ end }}
 </h2>
+
+<nav>
+{{if .feed }}
+<a href="/feeds?category={{.feed.Category.Id}}">[{{.feed.Category.Name}}]</a>
+<a href="/feeds/edit?id={{.feed.Id}}">edit</a>
+<a href="/feeds?id={{.feed.Id}}" method="delete">delete</a>
+{{else}}
+<a href="/posts?unread">unread</a>
+<a href="/posts?readed">readed</a>
+<a href="/posts?saved">saved</a>
+{{end}}
+<a href="/refresh?id={{.feed.Id}}">refresh</a>
+</nav>
 
 <ul class="list">
   {{range $i, $post := .posts}}

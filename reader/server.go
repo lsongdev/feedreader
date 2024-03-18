@@ -109,23 +109,23 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		if !reader.CheckAuth(w, r) {
 			return
 		}
-		group := r.FormValue("group")
 		feedType := r.FormValue("type")
 		name := r.FormValue("name")
 		home := r.FormValue("home")
 		link := r.FormValue("link")
-		groupId, _ := strconv.Atoi(group)
-		id, err := reader.CreateFeed(feedType, name, home, link, groupId)
+		category := r.FormValue("category")
+		categoryId, _ := strconv.Atoi(category)
+		id, err := reader.CreateFeed(feedType, name, home, link, categoryId)
 		if err != nil {
 			reader.Error(w, err)
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusFound)
-		go reader.updateSubscriptionPosts(id)
+		go reader.updateFeedPosts(fmt.Sprint(id))
 		return
 	}
 
-	groups, err := reader.GetGroups()
+	categories, err := reader.GetCategories()
 	if err != nil {
 		reader.Error(w, err)
 		return
@@ -153,79 +153,94 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reader.Render(w, "new", H{
-		"groups": groups,
-		"type":   feedType,
-		"name":   name,
-		"home":   home,
-		"link":   link,
-		"url":    url,
+		"categories": categories,
+		"type":       feedType,
+		"name":       name,
+		"home":       home,
+		"link":       link,
+		"url":        url,
 	})
 }
 
 // FeedView handles requests to the feed page.
 func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
-
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		feeds, err := reader.GetFeeds(nil)
+	if r.URL.Query().Has("id") {
+		feedId := r.URL.Query().Get("id")
+		feed, err := reader.GetFeed(feedId)
 		if err != nil {
 			reader.Error(w, err)
 			return
 		}
-		reader.Render(w, "feeds", H{
-			"subscriptions": feeds,
+		posts, err := reader.GetPostsByFeedId(feedId)
+		if err != nil {
+			reader.Error(w, err)
+			return
+		}
+		reader.Render(w, "posts", H{
+			"feed":  feed,
+			"posts": posts,
 		})
 		return
 	}
-	feedId, err := strconv.Atoi(id)
+	var conditions []string
+	if r.URL.Query().Has("category") {
+		categoryId := r.URL.Query().Get("category")
+		conditions = append(conditions, fmt.Sprintf("g.id = %s", categoryId))
+	}
+	feeds, err := reader.GetFeeds(conditions)
 	if err != nil {
 		reader.Error(w, err)
 		return
 	}
-	feed, err := reader.GetFeed(feedId)
+	categories, err := reader.GetCategories()
 	if err != nil {
 		reader.Error(w, err)
 		return
 	}
-	posts, err := reader.GetPostsByFeedId(id)
-	if err != nil {
-		reader.Error(w, err)
-		return
-	}
-	reader.Render(w, "posts", H{
-		"subscription": feed,
-		"posts":        posts,
+	reader.Render(w, "feeds", H{
+		"feeds":      feeds,
+		"categories": categories,
 	})
 }
 
 // PostView handles requests to view a specific post.
 func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		posts, err := reader.GetPosts(nil)
+	if r.URL.Query().Has("id") {
+		id := r.URL.Query().Get("id")
+		post, err := reader.GetPost(id)
 		if err != nil {
 			reader.Error(w, err)
 			return
 		}
-		// Render the template with the data
-		reader.Render(w, "posts", H{
-			"posts": posts,
+		reader.Render(w, "post", H{
+			"post": post,
+			"body": template.HTML(post.Content),
 		})
 		return
 	}
-	post, err := reader.GetPost(id)
+	var conditions []string
+	if r.URL.Query().Has("unread") {
+		conditions = append(conditions, "is_read = 0")
+	}
+	if r.URL.Query().Has("readed") {
+		conditions = append(conditions, "is_read = 1")
+	}
+	if r.URL.Query().Has("saved") {
+		conditions = append(conditions, "is_saved = 1")
+	}
+	if r.URL.Query().Has("category") {
+		categoryId := r.URL.Query().Get("category")
+		conditions = append(conditions, fmt.Sprintf("g.id = %s", categoryId))
+	}
+	posts, err := reader.GetPosts(conditions)
 	if err != nil {
 		reader.Error(w, err)
 		return
 	}
-	reader.Render(w, "post", H{
-		"post": post,
-		"body": template.HTML(post.Content),
+	// Render the template with the data
+	reader.Render(w, "posts", H{
+		"posts": posts,
 	})
-}
-
-func (reader *Reader) GroupView(w http.ResponseWriter, r *http.Request) {
-	reader.Render(w, "groups", nil)
 }
 
 func (reader *Reader) ImportView(w http.ResponseWriter, r *http.Request) {
@@ -367,5 +382,33 @@ func (reader *Reader) PostsJson(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		reader.Error(w, err)
 		return
+	}
+}
+
+func (reader *Reader) CategoryView(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		return
+	}
+	r.ParseForm()
+	if !reader.CheckAuth(w, r) {
+		return
+	}
+	categoryName := r.FormValue("name")
+	categoryId, err := reader.CreateCategory(categoryName)
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/posts?category=%d", categoryId), http.StatusFound)
+}
+
+func (reader *Reader) RefreshView(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		go reader.updatePostsPeriodically()
+		http.Redirect(w, r, "/posts", http.StatusFound)
+	} else {
+		reader.updateFeedPosts(id)
+		http.Redirect(w, r, fmt.Sprintf("/feeds?id=%s", id), http.StatusFound)
 	}
 }
