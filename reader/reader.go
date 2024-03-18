@@ -14,7 +14,7 @@ import (
 	"github.com/song940/feedparser-go/opml"
 )
 
-type Group struct {
+type Category struct {
 	Id   int    `json:"id"`
 	Name string `json:"name"`
 }
@@ -25,7 +25,7 @@ type Feed struct {
 	Name      string    `json:"name"`
 	Home      string    `json:"home"`
 	Link      string    `json:"link"`
-	Group     *Group    `json:"group"`
+	Category  *Category `json:"category"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -61,7 +61,7 @@ func NewReader(config *Config) (reader *Reader, err error) {
 		return
 	}
 	if _, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS groups (
+		CREATE TABLE IF NOT EXISTS categories (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT,
 			UNIQUE (name)
@@ -77,10 +77,10 @@ func NewReader(config *Config) (reader *Reader, err error) {
 			name TEXT,
 			home TEXT,
 			link TEXT,
-			group_id INTEGER default 1,
+			category_id INTEGER default 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE (name, home, link),
-			FOREIGN KEY (group_id) REFERENCES groups (id)
+			FOREIGN KEY (category_id) REFERENCES categories (id)
 		)
 	`); err != nil {
 		return
@@ -109,7 +109,7 @@ func NewReader(config *Config) (reader *Reader, err error) {
 	reader = &Reader{
 		config: config, db: db, tick: tick,
 	}
-	reader.CreateGroup("All")
+	reader.CreateCategory("All")
 	go reader.updatePostsPeriodically()
 	return
 }
@@ -128,45 +128,45 @@ func (reader *Reader) ImportOPML(data []byte) (err error) {
 	return
 }
 
-func (reader *Reader) CreateGroup(name string) (id int, err error) {
+func (reader *Reader) CreateCategory(name string) (id int, err error) {
 	err = reader.db.QueryRow(`
-		INSERT INTO groups (name) VALUES (?) RETURNING id
+		INSERT INTO categories (name) VALUES (?) RETURNING id
 	`, name).Scan(&id)
 	return
 }
 
-func (reader *Reader) GetGroups() (groups []*Group, err error) {
-	rows, err := reader.db.Query("SELECT id, name FROM groups")
+func (reader *Reader) GetCategories() (categories []*Category, err error) {
+	rows, err := reader.db.Query("SELECT id, name FROM categories")
 	if err != nil {
 		return
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var group Group
-		err := rows.Scan(&group.Id, &group.Name)
+		var category Category
+		err := rows.Scan(&category.Id, &category.Name)
 		if err != nil {
 			return nil, err
 		}
-		groups = append(groups, &group)
+		categories = append(categories, &category)
 	}
 	return
 }
 
 func (reader *Reader) UpdateGroup(id int, name string) (err error) {
-	_, err = reader.db.Exec("UPDATE groups SET name = ? WHERE id = ?", name, id)
+	_, err = reader.db.Exec("UPDATE categories SET name = ? WHERE id = ?", name, id)
 	return
 }
 
 func (reader *Reader) DeleteGroup(id int) (err error) {
-	_, err = reader.db.Exec("DELETE FROM groups WHERE id = ?", id)
+	_, err = reader.db.Exec("DELETE FROM categories WHERE id = ?", id)
 	return
 }
 
 // CreateFeed adds a new subscription to the database.
-func (reader *Reader) CreateFeed(feedType, name, home, link string, group_id int) (id int, err error) {
+func (reader *Reader) CreateFeed(feedType, name, home, link string, category_id int) (id int, err error) {
 	err = reader.db.QueryRow(`
-		INSERT INTO feeds (type, name, home, link, group_id) VALUES (?, ?, ?, ?, ?) RETURNING id
-	`, feedType, name, home, link, group_id).Scan(&id)
+		INSERT INTO feeds (type, name, home, link, category_id) VALUES (?, ?, ?, ?, ?) RETURNING id
+	`, feedType, name, home, link, category_id).Scan(&id)
 	return id, err
 }
 
@@ -203,13 +203,13 @@ func (reader *Reader) CreatePost(feedId int, id, title, content, link string, pu
 // GetEntriesByCriteria retrieves entries (subscriptions or posts) based on the provided filter.
 func (reader *Reader) GetFeeds(conditions []string) (entries []*Feed, err error) {
 	var filter string
-	conditions = append(conditions, "f.group_id = g.id")
+	conditions = append(conditions, "f.category_id = g.id")
 	if len(conditions) > 0 {
 		filter = strings.Join(conditions, " AND ")
 	}
 	rows, err := reader.db.Query(fmt.Sprintf(`
 		SELECT f.id, f.type, f.name, f.home, f.link, f.created_at, g.id, g.name
-		FROM feeds f, groups g
+		FROM feeds f, categories g
 		WHERE  %s
 		ORDER BY f.created_at DESC`, filter))
 	if err != nil {
@@ -218,8 +218,8 @@ func (reader *Reader) GetFeeds(conditions []string) (entries []*Feed, err error)
 	defer rows.Close()
 	for rows.Next() {
 		var feed Feed
-		feed.Group = &Group{}
-		err := rows.Scan(&feed.Id, &feed.Type, &feed.Name, &feed.Home, &feed.Link, &feed.CreatedAt, &feed.Group.Id, &feed.Group.Name)
+		feed.Category = &Category{}
+		err := rows.Scan(&feed.Id, &feed.Type, &feed.Name, &feed.Home, &feed.Link, &feed.CreatedAt, &feed.Category.Id, &feed.Category.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -229,8 +229,8 @@ func (reader *Reader) GetFeeds(conditions []string) (entries []*Feed, err error)
 }
 
 // GetFeed retrieves a specific subscription from the database.
-func (reader *Reader) GetFeed(id int) (feed *Feed, err error) {
-	entries, err := reader.GetFeeds([]string{fmt.Sprintf("f.id = %d", id)})
+func (reader *Reader) GetFeed(id string) (feed *Feed, err error) {
+	entries, err := reader.GetFeeds([]string{fmt.Sprintf("f.id = %s", id)})
 	if err != nil {
 		return
 	}
@@ -245,10 +245,10 @@ func (reader *Reader) GetFeed(id int) (feed *Feed, err error) {
 // GetPostsByFilter retrieves posts based on the provided filter.
 func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
 	conditions = append(conditions, "p.feed_id = s.id")
-	conditions = append(conditions, "s.group_id = g.id")
+	conditions = append(conditions, "s.category_id = g.id")
 	sql := fmt.Sprintf(`
 		SELECT p.id, p.title, p.content, p.link, p.is_read, p.is_saved, p.pub_date, p.created_at, s.id, s.name, s.home, g.id, g.name
-		FROM posts p, feeds s, groups g
+		FROM posts p, feeds s, categories g
 		WHERE %s
 		ORDER BY p.created_at DESC
 	`, strings.Join(conditions, " AND "))
@@ -260,12 +260,12 @@ func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
 	for rows.Next() {
 		var post Post
 		post.Feed = Feed{}
-		post.Feed.Group = &Group{}
+		post.Feed.Category = &Category{}
 		err := rows.Scan(
 			&post.Id, &post.Title, &post.Content, &post.Link,
 			&post.IsRead, &post.IsSaved,
 			&post.PubDate, &post.CreatedAt,
-			&post.Feed.Id, &post.Feed.Name, &post.Feed.Home, &post.Feed.Group.Id, &post.Feed.Group.Name)
+			&post.Feed.Id, &post.Feed.Name, &post.Feed.Home, &post.Feed.Category.Id, &post.Feed.Category.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +300,7 @@ func (reader *Reader) UpdatePost(id string, updates []string) error {
 
 // updateSubscriptionPosts fetches new articles for a subscription and saves them to the database.
 func (reader *Reader) updateSubscriptionPosts(feedId int) (err error) {
-	subscrition, err := reader.GetFeed(feedId)
+	subscrition, err := reader.GetFeed(fmt.Sprint(feedId))
 	if err != nil {
 		return
 	}

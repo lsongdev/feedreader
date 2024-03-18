@@ -1,0 +1,17 @@
+{{define "page"}}
+<h2>Categories</h2>
+
+<!-- 
+<nav>
+    <a href="/categories/new">new</a>
+</nav> 
+-->
+
+<ul>
+    {{range $i, $category := .categories}}
+    <li>
+        <a href="/feeds?category={{$category.Id}}" >{{$category.Name}}</a>
+    </li>
+    {{end}}
+</ul>
+{{end}}

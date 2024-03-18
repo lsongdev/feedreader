@@ -37,13 +37,13 @@ func (r *Reader) FeverGroups() (response fever.GroupsResponse) {
 	for _, feed := range feeds {
 		feedIds = append(feedIds, strconv.Itoa(int(feed.Id)))
 	}
-	groups, err := r.GetGroups()
+	categories, err := r.GetCategories()
 	if err != nil {
-		log.Fatalf("Failed to get groups: %v", err)
+		log.Fatalf("Failed to get categories: %v", err)
 		return
 	}
-	response.Groups = make([]fever.Group, 0, len(groups))
-	for _, group := range groups {
+	response.Groups = make([]fever.Group, 0, len(categories))
+	for _, group := range categories {
 		response.Groups = append(response.Groups, fever.Group{
 			ID:    int64(group.Id),
 			Title: group.Name,

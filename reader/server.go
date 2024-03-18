@@ -125,7 +125,7 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groups, err := reader.GetGroups()
+	categories, err := reader.GetCategories()
 	if err != nil {
 		reader.Error(w, err)
 		return
@@ -153,49 +153,49 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reader.Render(w, "new", H{
-		"groups": groups,
-		"type":   feedType,
-		"name":   name,
-		"home":   home,
-		"link":   link,
-		"url":    url,
+		"categories": categories,
+		"type":       feedType,
+		"name":       name,
+		"home":       home,
+		"link":       link,
+		"url":        url,
 	})
 }
 
 // FeedView handles requests to the feed page.
 func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
-
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		feeds, err := reader.GetFeeds(nil)
+	if r.URL.Query().Has("id") {
+		feedId := r.URL.Query().Get("id")
+		feed, err := reader.GetFeed(feedId)
 		if err != nil {
 			reader.Error(w, err)
 			return
 		}
-		reader.Render(w, "feeds", H{
-			"subscriptions": feeds,
+		posts, err := reader.GetPostsByFeedId(feedId)
+		if err != nil {
+			reader.Error(w, err)
+			return
+		}
+		reader.Render(w, "posts", H{
+			"feed":  feed,
+			"posts": posts,
 		})
 		return
 	}
-	feedId, err := strconv.Atoi(id)
+	var conditions []string
+	if r.URL.Query().Has("category") {
+		categoryId := r.URL.Query().Get("category")
+		conditions = append(conditions, fmt.Sprintf("g.id = %s", categoryId))
+	}
+	feeds, err := reader.GetFeeds(conditions)
 	if err != nil {
 		reader.Error(w, err)
 		return
 	}
-	feed, err := reader.GetFeed(feedId)
-	if err != nil {
-		reader.Error(w, err)
-		return
-	}
-	posts, err := reader.GetPostsByFeedId(id)
-	if err != nil {
-		reader.Error(w, err)
-		return
-	}
-	reader.Render(w, "posts", H{
-		"subscription": feed,
-		"posts":        posts,
+	reader.Render(w, "feeds", H{
+		"feeds": feeds,
 	})
+	return
 }
 
 // PostView handles requests to view a specific post.
@@ -224,8 +224,15 @@ func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (reader *Reader) GroupView(w http.ResponseWriter, r *http.Request) {
-	reader.Render(w, "groups", nil)
+func (reader *Reader) CategoryView(w http.ResponseWriter, r *http.Request) {
+	categories, err := reader.GetCategories()
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	reader.Render(w, "categories", H{
+		"categories": categories,
+	})
 }
 
 func (reader *Reader) ImportView(w http.ResponseWriter, r *http.Request) {
