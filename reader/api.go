@@ -20,7 +20,7 @@ func (user *User) FeverAuthKey() string {
 func (r *Reader) FeverAuthenticate(apiKey string) bool {
 	log.Println("Authenticating", apiKey)
 	for _, user := range r.config.Users {
-		if apiKey == user.FeverAuthKey() {
+		if strings.ToUpper(apiKey) == user.FeverAuthKey() {
 			return true
 		}
 	}
