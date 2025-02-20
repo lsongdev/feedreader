@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -52,6 +53,47 @@ func (conf *Config) Load() error {
 		return err
 	}
 	return yaml.Unmarshal(data, &conf)
+}
+
+type Pagination struct {
+	Page  int
+	Size  int
+	Total int64
+}
+
+func (limit Pagination) Offset() int {
+	return (limit.Page - 1) * limit.Size
+}
+
+func (limit Pagination) SQL() string {
+	return fmt.Sprintf(" LIMIT %d OFFSET %d", limit.Size, limit.Offset())
+}
+
+func (limit Pagination) Prev() int {
+	return limit.Page - 1
+}
+
+func (limit Pagination) Next() int {
+	return limit.Page + 1
+}
+
+func (limit Pagination) HasMore() bool {
+	return limit.Total > int64(limit.Page*limit.Size)
+}
+
+func (limit Pagination) PageCount() int {
+	return int(limit.Total/int64(limit.Size)) + 1
+}
+
+func NewLimitFromQuery(query url.Values) *Pagination {
+	limit := &Pagination{Page: 1, Size: 100}
+	if query.Has("page") {
+		limit.Page, _ = strconv.Atoi(query.Get("page"))
+	}
+	if query.Has("size") {
+		limit.Size, _ = strconv.Atoi(query.Get("size"))
+	}
+	return limit
 }
 
 // Render renders an HTML template with the provided data.
@@ -171,14 +213,16 @@ func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
 			reader.Error(w, err)
 			return
 		}
-		posts, err := reader.GetPostsByFeedId(feedId)
+		limit := NewLimitFromQuery(r.URL.Query())
+		posts, err := reader.GetPostsByFeedId(feedId, limit)
 		if err != nil {
 			reader.Error(w, err)
 			return
 		}
 		reader.Render(w, "posts", H{
-			"feed":  feed,
-			"posts": posts,
+			"feed":       feed,
+			"posts":      posts,
+			"pagination": limit,
 		})
 		return
 	}
@@ -232,14 +276,16 @@ func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 		categoryId := r.URL.Query().Get("category")
 		conditions = append(conditions, fmt.Sprintf("g.id = %s", categoryId))
 	}
-	posts, err := reader.GetPosts(conditions)
+	limit := NewLimitFromQuery(r.URL.Query())
+	posts, err := reader.GetPosts(conditions, limit)
 	if err != nil {
 		reader.Error(w, err)
 		return
 	}
 	// Render the template with the data
 	reader.Render(w, "posts", H{
-		"posts": posts,
+		"posts":      posts,
+		"pagination": limit,
 	})
 }
 
@@ -272,7 +318,7 @@ func (reader *Reader) ImportView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) RssXml(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts(nil)
+	posts, err := reader.GetPosts(nil, nil)
 	if err != nil {
 		reader.Error(w, err)
 		return
@@ -297,7 +343,7 @@ func (reader *Reader) RssXml(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) AomXml(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts(nil)
+	posts, err := reader.GetPosts(nil, nil)
 	if err != nil {
 		reader.Error(w, err)
 		return
@@ -371,7 +417,7 @@ func (reader *Reader) FeedsJson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) PostsJson(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts(nil)
+	posts, err := reader.GetPosts(nil, nil)
 	if err != nil {
 		reader.Error(w, err)
 		return

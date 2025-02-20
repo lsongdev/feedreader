@@ -228,16 +228,26 @@ func (reader *Reader) GetFeed(id string) (feed *Feed, err error) {
 	return
 }
 
-// GetPostsByFilter retrieves posts based on the provided filter.
-func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
+func (reader *Reader) GetPosts(conditions []string, limit *Pagination) (posts []Post, err error) {
 	conditions = append(conditions, "p.feed_id = s.id")
 	conditions = append(conditions, "s.category_id = g.id")
-	sql := fmt.Sprintf(`
-		SELECT p.id, p.title, p.content, p.link, p.is_read, p.is_saved, p.pub_date, p.created_at, s.id, s.name, s.home, g.id, g.name
-		FROM posts p, feeds s, categories g
-		WHERE %s
-		ORDER BY p.pub_date DESC
-	`, strings.Join(conditions, " AND "))
+	sql := `SELECT p.id, p.title, p.content, p.link, p.is_read, p.is_saved, p.pub_date, p.created_at, 
+                s.id, s.name, s.home, g.id, g.name 
+                FROM posts p, feeds s, categories g`
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = fmt.Sprintf(" WHERE %s", strings.Join(conditions, " AND "))
+	}
+
+	sql = fmt.Sprintf("%s %s ORDER BY p.pub_date DESC", sql, whereClause)
+	if limit != nil {
+		sql = sql + limit.SQL()
+		err = reader.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM posts p, feeds s, categories g %s", whereClause)).Scan(&limit.Total)
+		if err != nil {
+			return
+		}
+	}
 	rows, err := reader.db.Query(sql)
 	if err != nil {
 		return
@@ -247,22 +257,23 @@ func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
 		var post Post
 		post.Feed = Feed{}
 		post.Feed.Category = &Category{}
-		err := rows.Scan(
+		err = rows.Scan(
 			&post.Id, &post.Title, &post.Content, &post.Link,
 			&post.IsRead, &post.IsSaved,
 			&post.PubDate, &post.CreatedAt,
-			&post.Feed.Id, &post.Feed.Name, &post.Feed.Home, &post.Feed.Category.Id, &post.Feed.Category.Name)
+			&post.Feed.Id, &post.Feed.Name, &post.Feed.Home,
+			&post.Feed.Category.Id, &post.Feed.Category.Name)
 		if err != nil {
-			return nil, err
+			return
 		}
-		posts = append(posts, &post)
+		posts = append(posts, post)
 	}
 	return
 }
 
 // GetPost retrieves a specific post from the database.
-func (reader *Reader) GetPost(id string) (post *Post, err error) {
-	posts, err := reader.GetPosts([]string{fmt.Sprintf("p.id = %s", id)})
+func (reader *Reader) GetPost(id string) (post Post, err error) {
+	posts, err := reader.GetPosts([]string{fmt.Sprintf("p.id = %s", id)}, nil)
 	if err != nil {
 		return
 	}
@@ -274,8 +285,8 @@ func (reader *Reader) GetPost(id string) (post *Post, err error) {
 }
 
 // GetPostsBySubscriptionId retrieves posts for a specific subscription.
-func (reader *Reader) GetPostsByFeedId(id string) ([]*Post, error) {
-	return reader.GetPosts([]string{fmt.Sprintf("p.feed_id = %s", id)})
+func (reader *Reader) GetPostsByFeedId(id string, limit *Pagination) ([]Post, error) {
+	return reader.GetPosts([]string{fmt.Sprintf("p.feed_id = %s", id)}, limit)
 }
 
 func (reader *Reader) UpdatePost(id string, updates []string) error {
