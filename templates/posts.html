@@ -27,4 +27,19 @@ Posts
   </li>
   {{end}}
 </ul>
+
+{{if gt .pagination.Total 0}}
+  <nav class="pagination">
+    {{if gt .pagination.Page 1}}
+      <a href="?page={{.pagination.Prev}}&size={{.pagination.Size}}">&lt;</a>
+    {{end}}
+
+    <span>{{.pagination.Page}}/{{.pagination.PageCount}}</span>
+
+    {{if .pagination.HasMore}}
+      <a href="?page={{.pagination.Next}}&size={{.pagination.Size}}">&gt;</a>
+    {{end}}
+  </nav>
+{{end}}
+
 {{end}}

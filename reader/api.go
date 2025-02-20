@@ -93,7 +93,7 @@ func (r *Reader) FeverItems(req *fever.ItemRequest) (response fever.ItemsRespons
 	if req.WithIDs != "" {
 		conditions = append(conditions, fmt.Sprintf("p.id IN (%s)", req.WithIDs))
 	}
-	posts, err := r.GetPosts(conditions)
+	posts, err := r.GetPosts(conditions, nil)
 	if err != nil {
 		log.Fatalf("Failed to get posts: %v", err)
 		return
