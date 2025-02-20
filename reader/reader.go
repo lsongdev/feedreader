@@ -10,8 +10,7 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
-	"github.com/song940/feedparser-go/feed"
-	"github.com/song940/feedparser-go/opml"
+	"github.com/lsongdev/feedreader/feed"
 )
 
 type Category struct {
@@ -156,33 +155,11 @@ func (reader *Reader) CreateFeed(feedType, name, home, link string, category_id 
 	return id, err
 }
 
-func parseTime(str string) (t time.Time, err error) {
-	layouts := []string{
-		time.RFC3339,
-		time.RFC1123,
-		time.RFC1123Z,
-		"Mon, 02 Jan 2006 15:04:05 GMT",
-		"Monday, 02 Jan 2006 15:04:05 -07:00",
-	}
-	for _, layout := range layouts {
-		t, err := time.Parse(layout, str)
-		if err == nil {
-			return t, nil
-		}
-	}
-	err = fmt.Errorf("could not parse time: %s", str)
-	return
-}
-
 // CreatePost adds a new post to the database.
-func (reader *Reader) CreatePost(feedId, entryId, title, content, link string, pubDate string) error {
-	t, err := parseTime(pubDate)
-	if err != nil {
-		t = time.Now()
-	}
-	_, err = reader.db.Exec(`
+func (reader *Reader) CreatePost(feedId, entryId, title, content, link string, pubDate time.Time) error {
+	_, err := reader.db.Exec(`
 		INSERT INTO posts (entry_id, title, content, link, pub_date, feed_id) VALUES (?, ?, ?, ?, ?, ?)
-	`, entryId, title, content, link, t, feedId)
+	`, entryId, title, content, link, pubDate, feedId)
 	return err
 }
 
@@ -228,16 +205,26 @@ func (reader *Reader) GetFeed(id string) (feed *Feed, err error) {
 	return
 }
 
-// GetPostsByFilter retrieves posts based on the provided filter.
-func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
+func (reader *Reader) GetPosts(conditions []string, limit *Pagination) (posts []Post, err error) {
 	conditions = append(conditions, "p.feed_id = s.id")
 	conditions = append(conditions, "s.category_id = g.id")
-	sql := fmt.Sprintf(`
-		SELECT p.id, p.title, p.content, p.link, p.is_read, p.is_saved, p.pub_date, p.created_at, s.id, s.name, s.home, g.id, g.name
-		FROM posts p, feeds s, categories g
-		WHERE %s
-		ORDER BY p.pub_date DESC
-	`, strings.Join(conditions, " AND "))
+	sql := `SELECT p.id, p.title, p.content, p.link, p.is_read, p.is_saved, p.pub_date, p.created_at, 
+                s.id, s.name, s.home, g.id, g.name 
+                FROM posts p, feeds s, categories g`
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = fmt.Sprintf(" WHERE %s", strings.Join(conditions, " AND "))
+	}
+
+	sql = fmt.Sprintf("%s %s ORDER BY p.pub_date DESC", sql, whereClause)
+	if limit != nil {
+		sql = sql + limit.SQL()
+		err = reader.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM posts p, feeds s, categories g %s", whereClause)).Scan(&limit.Total)
+		if err != nil {
+			return
+		}
+	}
 	rows, err := reader.db.Query(sql)
 	if err != nil {
 		return
@@ -247,22 +234,23 @@ func (reader *Reader) GetPosts(conditions []string) (posts []*Post, err error) {
 		var post Post
 		post.Feed = Feed{}
 		post.Feed.Category = &Category{}
-		err := rows.Scan(
+		err = rows.Scan(
 			&post.Id, &post.Title, &post.Content, &post.Link,
 			&post.IsRead, &post.IsSaved,
 			&post.PubDate, &post.CreatedAt,
-			&post.Feed.Id, &post.Feed.Name, &post.Feed.Home, &post.Feed.Category.Id, &post.Feed.Category.Name)
+			&post.Feed.Id, &post.Feed.Name, &post.Feed.Home,
+			&post.Feed.Category.Id, &post.Feed.Category.Name)
 		if err != nil {
-			return nil, err
+			return
 		}
-		posts = append(posts, &post)
+		posts = append(posts, post)
 	}
 	return
 }
 
 // GetPost retrieves a specific post from the database.
-func (reader *Reader) GetPost(id string) (post *Post, err error) {
-	posts, err := reader.GetPosts([]string{fmt.Sprintf("p.id = %s", id)})
+func (reader *Reader) GetPost(id string) (post Post, err error) {
+	posts, err := reader.GetPosts([]string{fmt.Sprintf("p.id = %s", id)}, nil)
 	if err != nil {
 		return
 	}
@@ -274,8 +262,8 @@ func (reader *Reader) GetPost(id string) (post *Post, err error) {
 }
 
 // GetPostsBySubscriptionId retrieves posts for a specific subscription.
-func (reader *Reader) GetPostsByFeedId(id string) ([]*Post, error) {
-	return reader.GetPosts([]string{fmt.Sprintf("p.feed_id = %s", id)})
+func (reader *Reader) GetPostsByFeedId(id string, limit *Pagination) ([]Post, error) {
+	return reader.GetPosts([]string{fmt.Sprintf("p.feed_id = %s", id)}, limit)
 }
 
 func (reader *Reader) UpdatePost(id string, updates []string) error {
@@ -284,41 +272,35 @@ func (reader *Reader) UpdatePost(id string, updates []string) error {
 	return err
 }
 
-// updateSubscriptionPosts fetches new articles for a subscription and saves them to the database.
+// updateFeedPosts fetches new articles for a subscription and saves them to the database.
 func (reader *Reader) updateFeedPosts(feedId string) (err error) {
-	subscrition, err := reader.GetFeed(feedId)
+	subscription, err := reader.GetFeed(feedId)
 	if err != nil {
 		return
 	}
-	log.Println("Updating posts for subscription", subscrition.Id, subscrition.Link)
-	switch subscrition.Type {
-	case "atom":
-		atom, err := feed.FetchAtom(subscrition.Link)
-		if err != nil {
-			return err
-		}
-		for _, entry := range atom.Entries {
-			content := entry.GetContent()
-			reader.CreatePost(feedId, entry.ID, entry.Title.Data, content, entry.Links[0].Href, entry.Updated)
-		}
-	case "rss":
-		rss, err := feed.FetchRss(subscrition.Link)
-		if err != nil {
-			return err
-		}
-		for _, article := range rss.Items {
-			id := article.Guid.Value
-			if id == "" {
-				id = article.Link
-			}
-			content := article.GetContent()
-			reader.CreatePost(feedId, id, article.Title, content, article.Link, article.PubDate)
-		}
-		return nil
-	default:
-		return fmt.Errorf("unknown subscription type: %s", subscrition.Type)
+
+	log.Println("Updating posts for subscription", subscription.Id, subscription.Link)
+
+	// Use the new FetchFeed function which automatically detects feed type
+	feedData, err := feed.FetchFeed(subscription.Link)
+	if err != nil {
+		return err
 	}
-	return
+
+	// Process all feed items
+	for _, item := range feedData.Items {
+		// Create post in database
+		reader.CreatePost(
+			feedId,
+			item.ID,
+			item.Title,
+			item.Description,
+			item.Link,
+			item.PubDate,
+		)
+	}
+
+	return nil
 }
 
 // updatePostsPeriodically periodically updates posts for all subscriptions.
@@ -342,7 +324,7 @@ func (reader *Reader) updatePostsPeriodically() {
 }
 
 func (reader *Reader) ImportOPML(data []byte) (err error) {
-	res, err := opml.ParseOPML(data)
+	res, err := feed.ParseOPML(data)
 	if err != nil {
 		return
 	}
