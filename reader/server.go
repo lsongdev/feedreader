@@ -8,14 +8,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
-	"github.com/song940/feedparser-go/feed"
-	"github.com/song940/feedparser-go/opml"
-	"github.com/song940/feedreader/templates"
+	"github.com/lsongdev/feedreader/feed"
+	"github.com/lsongdev/feedreader/templates"
 	"gopkg.in/yaml.v2"
 )
 
@@ -52,6 +52,47 @@ func (conf *Config) Load() error {
 		return err
 	}
 	return yaml.Unmarshal(data, &conf)
+}
+
+type Pagination struct {
+	Page  int
+	Size  int
+	Total int64
+}
+
+func (limit Pagination) Offset() int {
+	return (limit.Page - 1) * limit.Size
+}
+
+func (limit Pagination) SQL() string {
+	return fmt.Sprintf(" LIMIT %d OFFSET %d", limit.Size, limit.Offset())
+}
+
+func (limit Pagination) Prev() int {
+	return limit.Page - 1
+}
+
+func (limit Pagination) Next() int {
+	return limit.Page + 1
+}
+
+func (limit Pagination) HasMore() bool {
+	return limit.Total > int64(limit.Page*limit.Size)
+}
+
+func (limit Pagination) PageCount() int {
+	return int(limit.Total/int64(limit.Size)) + 1
+}
+
+func NewLimitFromQuery(query url.Values) *Pagination {
+	limit := &Pagination{Page: 1, Size: 100}
+	if query.Has("page") {
+		limit.Page, _ = strconv.Atoi(query.Get("page"))
+	}
+	if query.Has("size") {
+		limit.Size, _ = strconv.Atoi(query.Get("size"))
+	}
+	return limit
 }
 
 // Render renders an HTML template with the provided data.
@@ -134,23 +175,11 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 	var feedType, name, home, link string
 	url := r.URL.Query().Get("url")
 	link = url
-	if link != "" {
-		if feedType == "" {
-			rss, err := feed.FetchRss(link)
-			if err == nil {
-				feedType = "rss"
-				name = rss.Title
-				home = rss.Link
-			}
-		}
-		if feedType == "" {
-			atom, err := feed.FetchAtom(link)
-			if err == nil {
-				feedType = "atom"
-				name = atom.Title.Data
-				home = atom.Links[0].Href
-			}
-		}
+	feedData, err := feed.FetchFeed(link)
+	if err == nil {
+		feedType = string(feedData.Type)
+		name = feedData.Title
+		home = feedData.Link
 	}
 	reader.Render(w, "new", H{
 		"categories": categories,
@@ -162,26 +191,7 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// FeedView handles requests to the feed page.
-func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Has("id") {
-		feedId := r.URL.Query().Get("id")
-		feed, err := reader.GetFeed(feedId)
-		if err != nil {
-			reader.Error(w, err)
-			return
-		}
-		posts, err := reader.GetPostsByFeedId(feedId)
-		if err != nil {
-			reader.Error(w, err)
-			return
-		}
-		reader.Render(w, "posts", H{
-			"feed":  feed,
-			"posts": posts,
-		})
-		return
-	}
+func (reader *Reader) FeedsView(w http.ResponseWriter, r *http.Request) {
 	var conditions []string
 	if r.URL.Query().Has("category") {
 		categoryId := r.URL.Query().Get("category")
@@ -201,6 +211,51 @@ func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
 		"feeds":      feeds,
 		"categories": categories,
 	})
+}
+
+func (reader *Reader) PostsView(w http.ResponseWriter, r *http.Request) {
+	feedId := r.URL.Query().Get("id")
+	feed, err := reader.GetFeed(feedId)
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	limit := NewLimitFromQuery(r.URL.Query())
+	posts, err := reader.GetPostsByFeedId(feedId, limit)
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	reader.Render(w, "posts", H{
+		"feed":       feed,
+		"posts":      posts,
+		"pagination": limit,
+	})
+}
+
+func (reader *Reader) DeleteFeedView(w http.ResponseWriter, r *http.Request) {
+	feedId := r.URL.Query().Get("id")
+	err := reader.DeleteFeed(feedId)
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// FeedView handles requests to the feed page.
+func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if r.URL.Query().Has("id") {
+			reader.PostsView(w, r)
+		} else {
+			reader.FeedsView(w, r)
+		}
+	case "DELETE":
+		reader.DeleteFeedView(w, r)
+	}
+
 }
 
 // PostView handles requests to view a specific post.
@@ -232,14 +287,16 @@ func (reader *Reader) PostView(w http.ResponseWriter, r *http.Request) {
 		categoryId := r.URL.Query().Get("category")
 		conditions = append(conditions, fmt.Sprintf("g.id = %s", categoryId))
 	}
-	posts, err := reader.GetPosts(conditions)
+	limit := NewLimitFromQuery(r.URL.Query())
+	posts, err := reader.GetPosts(conditions, limit)
 	if err != nil {
 		reader.Error(w, err)
 		return
 	}
 	// Render the template with the data
 	reader.Render(w, "posts", H{
-		"posts": posts,
+		"posts":      posts,
+		"pagination": limit,
 	})
 }
 
@@ -272,7 +329,7 @@ func (reader *Reader) ImportView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) RssXml(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts(nil)
+	posts, err := reader.GetPosts(nil, nil)
 	if err != nil {
 		reader.Error(w, err)
 		return
@@ -297,7 +354,7 @@ func (reader *Reader) RssXml(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) AomXml(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts(nil)
+	posts, err := reader.GetPosts(nil, nil)
 	if err != nil {
 		reader.Error(w, err)
 		return
@@ -335,12 +392,12 @@ func (reader *Reader) OpmlXml(w http.ResponseWriter, r *http.Request) {
 		reader.Error(w, err)
 		return
 	}
-	out := &opml.OPML{
+	out := &feed.OPML{
 		Title:     reader.config.Title,
 		CreatedAt: time.Now(),
 	}
 	for _, subscription := range subscriptions {
-		out.Outlines = append(out.Outlines, opml.Outline{
+		out.Outlines = append(out.Outlines, feed.Outline{
 			Type:    subscription.Type,
 			Title:   subscription.Name,
 			Text:    subscription.Name,
@@ -371,7 +428,7 @@ func (reader *Reader) FeedsJson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (reader *Reader) PostsJson(w http.ResponseWriter, r *http.Request) {
-	posts, err := reader.GetPosts(nil)
+	posts, err := reader.GetPosts(nil, nil)
 	if err != nil {
 		reader.Error(w, err)
 		return

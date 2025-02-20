@@ -27,4 +27,28 @@ Posts
   </li>
   {{end}}
 </ul>
+
+{{if gt .pagination.Total 0}}
+  <nav class="pagination">
+    {{if gt .pagination.Page 1}}
+      {{if .feed }} 
+      <a href="?id={{.feed.Id}}&page={{.pagination.Prev}}&size={{.pagination.Size}}">&lt;</a>
+      {{else}}
+      <a href="?page={{.pagination.Prev}}&size={{.pagination.Size}}">&lt;</a>
+      {{end}}
+    {{end}}
+
+    <span>{{.pagination.Page}}/{{.pagination.PageCount}}</span>
+
+    {{if .pagination.HasMore}}
+      {{if .feed }} 
+      <a href="?id={{.feed.Id}}&page={{.pagination.Next}}&size={{.pagination.Size}}">&gt;</a>
+      {{else}}
+      <a href="?page={{.pagination.Next}}&size={{.pagination.Size}}">&gt;</a>
+      {{end}}
+    {{end}}
+  </nav>
+{{end}}
+
+
 {{end}}

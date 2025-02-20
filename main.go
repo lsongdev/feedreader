@@ -6,7 +6,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/song940/feedreader/reader"
+	"github.com/lsongdev/feedreader/reader"
 	"github.com/song940/fever-go/fever"
 )
 
