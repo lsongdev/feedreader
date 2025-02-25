@@ -14,9 +14,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/song940/feedparser-go/feed"
-	"github.com/song940/feedparser-go/opml"
-	"github.com/song940/feedreader/templates"
+	"github.com/lsongdev/feedreader/feed"
+	"github.com/lsongdev/feedreader/templates"
 	"gopkg.in/yaml.v2"
 )
 
@@ -176,23 +175,11 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 	var feedType, name, home, link string
 	url := r.URL.Query().Get("url")
 	link = url
-	if link != "" {
-		if feedType == "" {
-			rss, err := feed.FetchRss(link)
-			if err == nil {
-				feedType = "rss"
-				name = rss.Title
-				home = rss.Link
-			}
-		}
-		if feedType == "" {
-			atom, err := feed.FetchAtom(link)
-			if err == nil {
-				feedType = "atom"
-				name = atom.Title.Data
-				home = atom.Links[0].Href
-			}
-		}
+	feedData, err := feed.FetchFeed(link)
+	if err == nil {
+		feedType = feedData.Type
+		name = feedData.Title
+		home = feedData.Link
 	}
 	reader.Render(w, "new", H{
 		"categories": categories,
@@ -381,12 +368,12 @@ func (reader *Reader) OpmlXml(w http.ResponseWriter, r *http.Request) {
 		reader.Error(w, err)
 		return
 	}
-	out := &opml.OPML{
+	out := &feed.OPML{
 		Title:     reader.config.Title,
 		CreatedAt: time.Now(),
 	}
 	for _, subscription := range subscriptions {
-		out.Outlines = append(out.Outlines, opml.Outline{
+		out.Outlines = append(out.Outlines, feed.Outline{
 			Type:    subscription.Type,
 			Title:   subscription.Name,
 			Text:    subscription.Name,

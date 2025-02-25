@@ -1,6 +1,8 @@
 
 title: Reader
 
+listen: 0:7789
+
 users:
-  - username: admin
-    password: admin12311
+  - username: lsong
+    password: lsong940

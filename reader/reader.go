@@ -10,8 +10,7 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
-	"github.com/song940/feedparser-go/feed"
-	"github.com/song940/feedparser-go/opml"
+	"github.com/lsongdev/feedreader/feed"
 )
 
 type Category struct {
@@ -156,33 +155,11 @@ func (reader *Reader) CreateFeed(feedType, name, home, link string, category_id 
 	return id, err
 }
 
-func parseTime(str string) (t time.Time, err error) {
-	layouts := []string{
-		time.RFC3339,
-		time.RFC1123,
-		time.RFC1123Z,
-		"Mon, 02 Jan 2006 15:04:05 GMT",
-		"Monday, 02 Jan 2006 15:04:05 -07:00",
-	}
-	for _, layout := range layouts {
-		t, err := time.Parse(layout, str)
-		if err == nil {
-			return t, nil
-		}
-	}
-	err = fmt.Errorf("could not parse time: %s", str)
-	return
-}
-
 // CreatePost adds a new post to the database.
-func (reader *Reader) CreatePost(feedId, entryId, title, content, link string, pubDate string) error {
-	t, err := parseTime(pubDate)
-	if err != nil {
-		t = time.Now()
-	}
-	_, err = reader.db.Exec(`
+func (reader *Reader) CreatePost(feedId, entryId, title, content, link string, pubDate time.Time) error {
+	_, err := reader.db.Exec(`
 		INSERT INTO posts (entry_id, title, content, link, pub_date, feed_id) VALUES (?, ?, ?, ?, ?, ?)
-	`, entryId, title, content, link, t, feedId)
+	`, entryId, title, content, link, pubDate, feedId)
 	return err
 }
 
@@ -295,41 +272,35 @@ func (reader *Reader) UpdatePost(id string, updates []string) error {
 	return err
 }
 
-// updateSubscriptionPosts fetches new articles for a subscription and saves them to the database.
+// updateFeedPosts fetches new articles for a subscription and saves them to the database.
 func (reader *Reader) updateFeedPosts(feedId string) (err error) {
-	subscrition, err := reader.GetFeed(feedId)
+	subscription, err := reader.GetFeed(feedId)
 	if err != nil {
 		return
 	}
-	log.Println("Updating posts for subscription", subscrition.Id, subscrition.Link)
-	switch subscrition.Type {
-	case "atom":
-		atom, err := feed.FetchAtom(subscrition.Link)
-		if err != nil {
-			return err
-		}
-		for _, entry := range atom.Entries {
-			content := entry.GetContent()
-			reader.CreatePost(feedId, entry.ID, entry.Title.Data, content, entry.Links[0].Href, entry.Updated)
-		}
-	case "rss":
-		rss, err := feed.FetchRss(subscrition.Link)
-		if err != nil {
-			return err
-		}
-		for _, article := range rss.Items {
-			id := article.Guid.Value
-			if id == "" {
-				id = article.Link
-			}
-			content := article.GetContent()
-			reader.CreatePost(feedId, id, article.Title, content, article.Link, article.PubDate)
-		}
-		return nil
-	default:
-		return fmt.Errorf("unknown subscription type: %s", subscrition.Type)
+
+	log.Println("Updating posts for subscription", subscription.Id, subscription.Link)
+
+	// Use the new FetchFeed function which automatically detects feed type
+	feedData, err := feed.FetchFeed(subscription.Link)
+	if err != nil {
+		return err
 	}
-	return
+
+	// Process all feed items
+	for _, item := range feedData.Items {
+		// Create post in database
+		reader.CreatePost(
+			feedId,
+			item.ID,
+			item.Title,
+			item.Description,
+			item.Link,
+			item.PubDate,
+		)
+	}
+
+	return nil
 }
 
 // updatePostsPeriodically periodically updates posts for all subscriptions.
@@ -353,7 +324,7 @@ func (reader *Reader) updatePostsPeriodically() {
 }
 
 func (reader *Reader) ImportOPML(data []byte) (err error) {
-	res, err := opml.ParseOPML(data)
+	res, err := feed.ParseOPML(data)
 	if err != nil {
 		return
 	}
