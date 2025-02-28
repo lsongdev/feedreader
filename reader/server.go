@@ -177,7 +177,7 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 	link = url
 	feedData, err := feed.FetchFeed(link)
 	if err == nil {
-		feedType = feedData.Type
+		feedType = string(feedData.Type)
 		name = feedData.Title
 		home = feedData.Link
 	}
