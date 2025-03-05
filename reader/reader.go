@@ -205,6 +205,11 @@ func (reader *Reader) GetFeed(id string) (feed *Feed, err error) {
 	return
 }
 
+func (reader *Reader) DeleteFeed(id string) (err error) {
+	_, err = reader.db.Exec("DELETE FROM feeds WHERE id = ?", id)
+	return
+}
+
 func (reader *Reader) GetPosts(conditions []string, limit *Pagination) (posts []Post, err error) {
 	conditions = append(conditions, "p.feed_id = s.id")
 	conditions = append(conditions, "s.category_id = g.id")

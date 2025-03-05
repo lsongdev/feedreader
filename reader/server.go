@@ -191,28 +191,7 @@ func (reader *Reader) NewView(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// FeedView handles requests to the feed page.
-func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Has("id") {
-		feedId := r.URL.Query().Get("id")
-		feed, err := reader.GetFeed(feedId)
-		if err != nil {
-			reader.Error(w, err)
-			return
-		}
-		limit := NewLimitFromQuery(r.URL.Query())
-		posts, err := reader.GetPostsByFeedId(feedId, limit)
-		if err != nil {
-			reader.Error(w, err)
-			return
-		}
-		reader.Render(w, "posts", H{
-			"feed":       feed,
-			"posts":      posts,
-			"pagination": limit,
-		})
-		return
-	}
+func (reader *Reader) FeedsView(w http.ResponseWriter, r *http.Request) {
 	var conditions []string
 	if r.URL.Query().Has("category") {
 		categoryId := r.URL.Query().Get("category")
@@ -232,6 +211,51 @@ func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
 		"feeds":      feeds,
 		"categories": categories,
 	})
+}
+
+func (reader *Reader) PostsView(w http.ResponseWriter, r *http.Request) {
+	feedId := r.URL.Query().Get("id")
+	feed, err := reader.GetFeed(feedId)
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	limit := NewLimitFromQuery(r.URL.Query())
+	posts, err := reader.GetPostsByFeedId(feedId, limit)
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	reader.Render(w, "posts", H{
+		"feed":       feed,
+		"posts":      posts,
+		"pagination": limit,
+	})
+}
+
+func (reader *Reader) DeleteFeedView(w http.ResponseWriter, r *http.Request) {
+	feedId := r.URL.Query().Get("id")
+	err := reader.DeleteFeed(feedId)
+	if err != nil {
+		reader.Error(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// FeedView handles requests to the feed page.
+func (reader *Reader) FeedView(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if r.URL.Query().Has("id") {
+			reader.PostsView(w, r)
+		} else {
+			reader.FeedsView(w, r)
+		}
+	case "DELETE":
+		reader.DeleteFeedView(w, r)
+	}
+
 }
 
 // PostView handles requests to view a specific post.
